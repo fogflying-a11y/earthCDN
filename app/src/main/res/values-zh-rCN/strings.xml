@@ -29,13 +29,14 @@
     <string name="traffic_estimated">预计流量: %d MB/月</string>
     <string name="wifi_only">只在 Wi-Fi 连接时更新</string>
     <string name="scale_and_move">缩放和移动…</string>
+    <string name="save_long_press">长按按钮进入CDN配置</string>
     <string name="save">按下按钮完成设置</string>
 
     <string name="scaling_hint">移动或双指缩放地球</string>
     <string name="scaling_set">设置缩放</string>
     <string name="scaling_restore">缩放已恢复为默认值</string>
 
-    <string name="data_saver_considered">流量节省程序已开启，图像将会已最低分辨率和最长间隔抓取。</string>
+    <string name="data_saver_considered">流量节省程序已开启，图像将会以最低分辨率和最长间隔抓取。</string>
 
     <string name="auto_sync_disabled">自动同步未启用</string>
     <string name="auto_sync_disabled_text">
@@ -70,12 +71,16 @@
     <string name="fork_me_on_github">访问项目在 GitHub 上的源代码</string>
     <string name="contact_us">联系我们</string>
     <string name="contact_us_text"><![CDATA[
-        <p>要获取更多最新消息，请关注我们的微信公众号「<a href="copy:馒头社">馒头社</a>」。</p>
+        <p>要获取更多最新消息，请关注我们的微信公众号「<a href="copy:馒头社">馒头社</a>」。</p><p>本版本在作者源代码的基础上，基于Claude Code添加CDN功能</p>
     ]]></string>
-    <string name="images_from">卫星影像来自</string>
+    <string name="images_from">卫星影像来自向日葵9号卫星，经CloudinaryCDN获取</string>
     <string name="inspired_by">灵感来自</string>
     <string name="libraries_used">本项目用到了下列开源库</string>
 
     <string name="about_copied">「%s」已复制到剪贴板</string>
+
+    <string name="cdn_category_title">Cloudinary CDN</string>
+    <string name="cdn_cloud_name_title">Cloud Name</string>
+    <string name="cdn_cloud_name_summary">输入您的 Cloudinary cloud name</string>
 
 </resources>

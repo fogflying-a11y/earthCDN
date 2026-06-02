@@ -32,8 +32,6 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.net.ConnectivityManagerCompat;
 
-import com.umeng.analytics.MobclickAgent;
-
 import java.io.File;
 import java.util.Date;
 import java.util.HashMap;
@@ -44,6 +42,7 @@ import ooo.oxo.apps.earth.dao.Earth;
 import ooo.oxo.apps.earth.dao.Settings;
 import ooo.oxo.apps.earth.provider.EarthsContract;
 import ooo.oxo.apps.earth.provider.SettingsContract;
+import ooo.oxo.apps.earth.cdn.CloudinaryClient;
 
 public class EarthSyncImpl {
 
@@ -63,7 +62,7 @@ public class EarthSyncImpl {
     private final ConnectivityManager cm;
     private final ContentResolver resolver;
 
-    private final EarthFetcher fetcher;
+    private EarthFetcher fetcher;
 
     public EarthSyncImpl(Context context) {
         this.context = context;
@@ -71,8 +70,11 @@ public class EarthSyncImpl {
         this.pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
         this.cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         this.resolver = context.getContentResolver();
+    }
 
-        this.fetcher = new EarthFetcher(context);
+    private EarthFetcher createFetcher(String cloudName) {
+        CloudinaryClient cdnClient = new CloudinaryClient(cloudName);
+        return new EarthFetcher(context, cdnClient);
     }
 
     public Map<String, Long> sync(boolean manual) {
@@ -87,6 +89,8 @@ public class EarthSyncImpl {
         final Map<String, Long> result = new HashMap<>();
         final Settings settings = loadSettings();
 
+        Log.d(TAG, "sync() started, manual=" + manual);
+
         if (settings == null) {
             result.put(RESULT_ERROR, ERROR_DB);
             Log.e(TAG, "skipped sync since impossible null settings");
@@ -96,42 +100,31 @@ public class EarthSyncImpl {
         final boolean metered = ConnectivityManagerCompat.isActiveNetworkMetered(cm);
 
         if (!manual && settings.wifiOnly && metered) {
-            Log.d(TAG, "skipped sync until in non-metered connection");
+            Log.d(TAG, "skipped sync until in non-metered connection (wifiOnly=" + settings.wifiOnly + ", metered=" + metered + ")");
             return result;
         }
 
         if (manual) {
-            // Override interval limit for manual refresh
             settings.interval = TimeUnit.MINUTES.toMillis(10);
         }
 
         if (NetworkStateUtil.shouldConsiderSavingData(cm)) {
-            // Override to lowest settings for data saver
             settings.interval = TimeUnit.MINUTES.toMillis(120);
             settings.resolution = 550;
         }
 
-        final Earth latest = loadLatestEarth(content);
-        if (latest != null) {
-            final long syncUntil = latest.fetchedAt.getTime() + settings.interval;
-            if (syncUntil > System.currentTimeMillis()) {
-                result.put(RESULT_DELAY_UNTIL, TimeUnit.MILLISECONDS.toSeconds(syncUntil));
-                Log.d(TAG, "delayed sync until " + new Date(syncUntil));
-                return result;
-            }
-        }
-
         File fetched = null;
+        fetcher = createFetcher(settings.cdnCloudName);
 
         try {
+            Log.e(TAG, "about to fetch with resolution=" + settings.resolution + ", cloudName=" + settings.cdnCloudName);
             fetched = fetcher.fetch(settings.resolution);
+            Log.d(TAG, "fetch returned: " + (fetched != null ? fetched.getAbsolutePath() : "null"));
 
             final Earth earth = new Earth(fetched.getAbsolutePath());
             content.insert(EarthsContract.CONTENT_URI, earth.toContentValues());
 
             final int cleaned = content.delete(EarthsContract.OUTDATED_CONTENT_URI);
-
-            sendOnTraffic(settings, fetched);
 
             result.put(RESULT_INSERTS, 1L);
             result.put(RESULT_DELETES, (long) cleaned);
@@ -148,69 +141,39 @@ public class EarthSyncImpl {
             Log.e(TAG, "failed fetching earth", e);
         }
 
-        sendOnFetch(settings, fetched != null);
         return result;
     }
 
     public void cancel() {
-        fetcher.clean();
+        if (fetcher != null) {
+            fetcher.clean();
+        }
     }
 
     @Nullable
     private Settings loadSettings() {
+        Log.e(TAG, "loadSettings() from process: " + android.os.Process.myPid());
         final Cursor cursor = resolver.query(SettingsContract.CONTENT_URI,
                 null, null, null, null);
 
         if (cursor == null) {
+            Log.e(TAG, "loadSettings() cursor is null");
             return null;
         }
 
         final Settings settings = Settings.fromCursor(cursor);
 
+        if (settings == null) {
+            Log.e(TAG, "loadSettings() Settings.fromCursor returned null (no rows in DB)");
+        } else {
+            Log.e(TAG, "loadSettings() interval=" + settings.interval
+                    + ", resolution=" + settings.resolution
+                    + ", cdnCloudName='" + settings.cdnCloudName + "'");
+        }
+
         cursor.close();
 
         return settings;
-    }
-
-    @Nullable
-    private Earth loadLatestEarth(ContentInterface content) {
-        final Cursor cursor = content.query(EarthsContract.LATEST_CONTENT_URI);
-
-        if (cursor == null) {
-            return null;
-        }
-
-        final Earth earth = Earth.fromCursor(cursor);
-
-        cursor.close();
-
-        return earth;
-    }
-
-    private void sendOnFetch(Settings settings, boolean success) {
-        HashMap<String, String> event = new HashMap<>();
-
-        event.put("interval", String.valueOf(TimeUnit.MILLISECONDS.toMinutes(settings.interval)));
-        event.put("resolution", String.valueOf(settings.resolution));
-        event.put("wifi_only", String.valueOf(settings.wifiOnly));
-
-        event.put("screen_on", String.valueOf(pm.isScreenOn()));
-
-        event.put("success", String.valueOf(success));
-
-        MobclickAgent.onEvent(context, "fetch", event);
-    }
-
-    private void sendOnTraffic(Settings settings, File fetched) {
-        HashMap<String, String> event = new HashMap<>();
-
-        event.put("interval", String.valueOf(TimeUnit.MILLISECONDS.toMinutes(settings.interval)));
-        event.put("resolution", String.valueOf(settings.resolution));
-        event.put("wifi_only", String.valueOf(settings.wifiOnly));
-
-        event.put("screen_on", String.valueOf(pm.isScreenOn()));
-
-        MobclickAgent.onEventValue(context, "traffic", event, (int) fetched.length());
     }
 
     @SuppressWarnings({"UnusedReturnValue", "SameParameterValue"})
@@ -226,8 +189,7 @@ public class EarthSyncImpl {
             return new ContentInterface() {
                 @Override
                 Cursor query(Uri uri) {
-                    return resolver.query(uri, null, null, null,
-                            null);
+                    return resolver.query(uri, null, null, null, null);
                 }
 
                 @Override
@@ -247,8 +209,7 @@ public class EarthSyncImpl {
                 @Override
                 Cursor query(Uri uri) {
                     try {
-                        return client.query(uri, null, null, null,
-                                null);
+                        return client.query(uri, null, null, null, null);
                     } catch (RemoteException e) {
                         return null;
                     }

@@ -20,6 +20,7 @@ package ooo.oxo.apps.earth;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
+import android.os.Build;
 import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
@@ -78,7 +79,11 @@ public class EarthAppWidgetProvider extends AppWidgetProvider {
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         final Intent intent = new Intent(context, MainActivity.class);
-        final PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, 0);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        final PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, flags);
 
         final RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.app_widget);
         views.setOnClickPendingIntent(R.id.earth, pendingIntent);
@@ -87,12 +92,13 @@ public class EarthAppWidgetProvider extends AppWidgetProvider {
         final int size = Math.min(metrics.widthPixels, metrics.heightPixels);
 
         Glide.with(context)
-                .load(getLatestEarth())
                 .asBitmap()
+                .load(getLatestEarth())
                 .error(R.drawable.preview)
-                .transform(new MaskTransformation(context, R.drawable.mask))
+                .transform(new MaskTransformation(R.drawable.mask))
+                .override(size, size)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
-                .into(new AppWidgetTarget(context, views, R.id.earth, size, size, appWidgetIds));
+                .into(new AppWidgetTarget(context, R.id.earth, views, appWidgetIds));
     }
 
 }

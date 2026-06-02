@@ -24,20 +24,22 @@ import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 
 class WallpaperUtil {
 
     static void changeLiveWallPaper(Context context) {
         Intent intent = new Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER);
-
         intent.putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
                 new ComponentName(context, EarthWallpaperService.class));
-
         intent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
 
         try {
             context.startActivity(intent);
-        } catch (ActivityNotFoundException ignored) {
+        } catch (ActivityNotFoundException e) {
+            Intent chooser = new Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER);
+            chooser.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+            context.startActivity(chooser);
         }
     }
 
@@ -49,8 +51,18 @@ class WallpaperUtil {
     }
 
     static boolean isSupported(Context context) {
+        PackageManager pm = context.getPackageManager();
+        if (pm.hasSystemFeature(PackageManager.FEATURE_LIVE_WALLPAPER)) {
+            return true;
+        }
+
         Intent intent = new Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER);
-        return intent.resolveActivity(context.getPackageManager()) != null;
+        if (intent.resolveActivity(pm) != null) {
+            return true;
+        }
+
+        Intent chooser = new Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER);
+        return chooser.resolveActivity(pm) != null;
     }
 
 }

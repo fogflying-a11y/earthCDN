@@ -20,12 +20,13 @@ package ooo.oxo.apps.earth;
 
 import android.util.Log;
 
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
+import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
-import com.google.android.gms.wearable.DataItemAsset;
-import com.google.android.gms.wearable.Node;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataMapItem;
 import com.google.android.gms.wearable.Wearable;
 import com.google.android.gms.wearable.WearableListenerService;
 
@@ -34,7 +35,7 @@ import org.apache.commons.io.FileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
 
 import ooo.oxo.apps.earth.dao.Earth;
 import ooo.oxo.apps.earth.provider.EarthsContract;
@@ -44,55 +45,52 @@ public class WatchSyncService extends WearableListenerService {
     private static final String TAG = "WatchSyncService";
 
     @Override
-    public void onPeerConnected(Node peer) {
-        Log.v(TAG, "phone connected");
-    }
-
-    @Override
-    public void onPeerDisconnected(Node peer) {
-        Log.v(TAG, "phone disconnected");
-    }
-
-    @Override
     public void onDataChanged(DataEventBuffer events) {
         Log.v(TAG, "data incoming from phone");
 
         for (DataEvent event : events) {
             if (event.getType() == DataEvent.TYPE_CHANGED &&
                     event.getDataItem().getUri().getPath().equals("/earth")) {
-                handleAsset(event.getDataItem().getAssets().get("earth"));
+                Asset asset = getAssetFromDataItem(event.getDataItem());
+                if (asset != null) {
+                    handleAsset(asset);
+                }
             }
         }
     }
 
-    private void handleAsset(DataItemAsset asset) {
+    private Asset getAssetFromDataItem(DataItem dataItem) {
+        try {
+            DataMapItem dataMapItem = DataMapItem.fromDataItem(dataItem);
+            return dataMapItem.getDataMap().getAsset("earth");
+        } catch (Exception e) {
+            Log.w(TAG, "failed to extract asset from data item", e);
+        }
+        return null;
+    }
+
+    private void handleAsset(Asset asset) {
         if (asset == null) {
             throw new IllegalArgumentException("asset must not be null");
         }
 
-        GoogleApiClient client = new GoogleApiClient.Builder(this)
-                .addApi(Wearable.API)
-                .build();
-
-        ConnectionResult connection = client.blockingConnect(10, TimeUnit.SECONDS);
-
-        if (!connection.isSuccess()) {
-            Log.e(TAG, "failed to connect to GoogleApiClient: " + connection.getErrorCode());
+        InputStream input = null;
+        try {
+            Task<InputStream> task = Wearable.getDataClient(this)
+                    .getFdForAsset(asset)
+                    .continueWith(t -> t.getResult().getInputStream());
+            input = Tasks.await(task);
+        } catch (ExecutionException | InterruptedException e) {
+            Log.e(TAG, "failed to get asset", e);
             return;
         }
-
-        InputStream input = Wearable.DataApi.getFdForAsset(client, asset)
-                .await()
-                .getInputStream();
-
-        client.disconnect();
 
         if (input == null) {
-            Log.e(TAG, "failed to get asset");
+            Log.e(TAG, "failed to get asset input stream");
             return;
         }
 
-        File file = new File(getCacheDir(), String.valueOf("earth_" + System.currentTimeMillis()));
+        File file = new File(getCacheDir(), "earth_" + System.currentTimeMillis());
 
         try {
             FileUtils.copyInputStreamToFile(input, file);

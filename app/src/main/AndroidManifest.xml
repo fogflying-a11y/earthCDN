@@ -17,11 +17,11 @@
   -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="ooo.oxo.apps.earth">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -36,7 +36,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <uses-permission android:name="com.google.android.permission.PROVIDE_BACKGROUND" />
 
@@ -62,12 +63,9 @@
             android:name="UMENG_CHANNEL"
             android:value="${UMENG_CHANNEL}" />
 
-        <meta-data
-            android:name="BUG_HD_SDK_GENERAL_KEY"
-            android:value="e415aca232aac6ef8deae1b81bc899c0" />
-
         <activity
             android:name=".MainActivity"
+            android:exported="true"
             android:label="${APP_NAME}"
             android:launchMode="singleInstance"
             android:theme="@style/SettingsTheme">
@@ -81,6 +79,7 @@
 
         <service
             android:name=".EarthWallpaperService"
+            android:exported="true"
             android:label="${APP_NAME}"
             android:permission="android.permission.BIND_WALLPAPER"
             android:process=":wallpaper">
@@ -95,7 +94,9 @@
 
         </service>
 
-        <receiver android:name=".EarthAppWidgetProvider">
+        <receiver
+            android:name=".EarthAppWidgetProvider"
+            android:exported="true">
 
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -107,10 +108,13 @@
 
         </receiver>
 
-        <activity android:name=".SettingsActivity" />
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
 
         <activity
             android:name=".AboutActivity"
+            android:exported="false"
             android:theme="@style/AboutTheme" />
 
         <provider
@@ -126,6 +130,7 @@
 
         <service
             android:name=".account.StubAuthenticatorService"
+            android:exported="true"
             tools:ignore="ExportedService">
 
             <intent-filter>
@@ -157,11 +162,14 @@
         <service
             android:name=".background.EarthBackgroundService"
             android:enabled="false"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
             android:process=":sync" />
 
         <receiver
             android:name=".background.EarthBackgroundInitializer"
             android:enabled="false"
+            android:exported="true"
             android:process=":sync">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -170,22 +178,25 @@
 
         <service
             android:name=".WatchStateService"
+            android:exported="true"
             android:process=":wear_sync">
 
             <intent-filter>
-                <action
-                    android:name="com.google.android.gms.wearable.BIND_LISTENER"
-                    tools:ignore="WearableBindListener" />
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
+                <data android:scheme="wear" android:host="*" />
             </intent-filter>
 
         </service>
 
         <service
             android:name=".WatchSyncService"
+            android:exported="false"
             android:process=":wear_sync" />
 
         <service
             android:name=".WatchTransferService"
+            android:exported="false"
             android:process=":wear_sync" />
 
     </application>

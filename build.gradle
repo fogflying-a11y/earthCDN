@@ -16,28 +16,42 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-ext.gitSha = 'git rev-parse --short HEAD'.execute([], project.rootDir).text.trim()
-ext.gitTag = 'git describe --tags --abbrev=0'.execute([], project.rootDir).text.trim()
-ext.gitCommits = Integer.parseInt('git rev-list --count HEAD'.execute([], project.rootDir).text.trim())
+ext.gitInfo = { ->
+    def gitSha = "unknown"
+    def gitTag = "0.0.0"
+    def gitCommits = 0
+    try {
+        def shaProc = ["git", "rev-parse", "--short", "HEAD"].execute(null, project.rootDir)
+        shaProc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        if (shaProc.exitValue() == 0) gitSha = shaProc.text.trim()
+
+        def tagProc = ["git", "describe", "--tags", "--abbrev=0"].execute(null, project.rootDir)
+        tagProc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        if (tagProc.exitValue() == 0) gitTag = tagProc.text.trim()
+
+        def countProc = ["git", "rev-list", "--count", "HEAD"].execute(null, project.rootDir)
+        countProc.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        if (countProc.exitValue() == 0) gitCommits = Integer.parseInt(countProc.text.trim())
+    } catch (Exception ignored) {
+    }
+    [sha: gitSha, tag: gitTag, commits: gitCommits]
+}
 
 buildscript {
     repositories {
-        jcenter()
         google()
+        mavenCentral()
     }
-
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.5.3'
+        classpath 'com.android.tools.build:gradle:8.9.1'
     }
 }
 
 allprojects {
     repositories {
-        jcenter()
         google()
+        mavenCentral()
         maven { url 'https://jitpack.io' }
-        maven { url 'https://dl.bintray.com/umsdk/release' }
-        maven { url "${rootProject.projectDir}/google-play-services-7-8-87" }
     }
 }
 

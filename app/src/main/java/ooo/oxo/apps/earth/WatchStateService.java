@@ -23,7 +23,8 @@ import android.util.Log;
 
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.WearableListenerService;
-import com.umeng.analytics.MobclickAgent;
+
+import java.util.List;
 
 /**
  * 用于当 Android Wear 设备连接上时启动 {@link WatchSyncService}，后者在没有设备连接时会自动退出以节省电量
@@ -33,13 +34,14 @@ public class WatchStateService extends WearableListenerService {
     private static final String TAG = "WatchStateService";
 
     @Override
-    public void onPeerConnected(Node peer) {
-        Log.v(TAG, "watch connected");
+    public void onConnectedNodes(List<Node> connectedNodes) {
+        Log.v(TAG, "connected nodes: " + connectedNodes.size());
 
-        startService(new Intent(this, WatchSyncService.class));
-        startService(new Intent(this, WatchTransferService.class));
-
-        MobclickAgent.onEvent(this, "watch_launched");
+        if (!connectedNodes.isEmpty()) {
+            Log.v(TAG, "watch connected");
+            startService(new Intent(this, WatchSyncService.class));
+            startService(new Intent(this, WatchTransferService.class));
+        }
     }
 
 }

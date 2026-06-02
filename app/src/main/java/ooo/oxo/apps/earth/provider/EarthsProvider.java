@@ -152,6 +152,7 @@ public class EarthsProvider extends ContentProvider {
 
             //noinspection ConstantConditions
             getContext().getContentResolver().notifyChange(uri, null, false);
+            getContext().getContentResolver().notifyChange(EarthsContract.LATEST_CONTENT_URI, null, false);
 
             return ContentUris.withAppendedId(uri, row);
         } catch (Exception e) {
@@ -258,7 +259,7 @@ public class EarthsProvider extends ContentProvider {
         private static final String TAG = "EarthsDatabaseHelper";
 
         private static final String DATABASE_NAME = "earths.db";
-        private static final int DATABASE_VERSION = 1;
+        private static final int DATABASE_VERSION = 2;
 
         EarthsDatabaseHelper(Context context) {
             super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -287,7 +288,11 @@ public class EarthsProvider extends ContentProvider {
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-            Log.e(TAG, "no need to upgrade currently");
+            Log.d(TAG, "Upgrading from " + oldVersion + " to " + newVersion);
+            if (oldVersion < 2) {
+                Log.d(TAG, "Clearing old earths records for fresh CDN fetch");
+                db.execSQL("DELETE FROM " + EarthsContract.TABLE);
+            }
         }
 
     }

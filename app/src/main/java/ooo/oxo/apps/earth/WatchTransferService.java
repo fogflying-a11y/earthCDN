@@ -18,60 +18,68 @@
 
 package ooo.oxo.apps.earth;
 
-import android.app.IntentService;
+import android.app.Service;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.IBinder;
 import android.util.Log;
 
+import androidx.annotation.Nullable;
+
 import com.bumptech.glide.Glide;
-import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.tasks.Tasks;
 import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
-import com.umeng.analytics.MobclickAgent;
 
 import java.io.ByteArrayOutputStream;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import ooo.oxo.apps.earth.provider.EarthsContract;
 
 /**
  * 将最新的图片同步到手表上
  */
-public class WatchTransferService extends IntentService {
+public class WatchTransferService extends Service {
 
     private static final String TAG = "WatchTransferService";
 
-    public WatchTransferService() {
-        super("WatchTransfer");
+    private HandlerThread handlerThread;
+    private Handler handler;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        handlerThread = new HandlerThread("WatchTransfer");
+        handlerThread.start();
+        handler = new Handler(handlerThread.getLooper());
     }
 
     @Override
-    protected void onHandleIntent(Intent intent) {
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        handler.post(this::doTransfer);
+        return START_NOT_STICKY;
+    }
+
+    private void doTransfer() {
         Log.d(TAG, "transferring earth from phone to watch...");
-
-        GoogleApiClient client = new GoogleApiClient.Builder(this)
-                .addApi(Wearable.API)
-                .build();
-
-        if (!client.blockingConnect(10, TimeUnit.SECONDS).isSuccess()) {
-            Log.e(TAG, "failed to connect to GoogleApiClient");
-            return;
-        }
 
         Bitmap image;
 
         try {
-            image = Glide.with(this).load(EarthsContract.LATEST_CONTENT_URI
-                    .buildUpon()
-                    .appendQueryParameter("t", String.valueOf(System.currentTimeMillis()))
-                    .build())
+            image = Glide.with(this)
                     .asBitmap()
-                    .into(360, 360)
+                    .load(EarthsContract.LATEST_CONTENT_URI
+                            .buildUpon()
+                            .appendQueryParameter("t", String.valueOf(System.currentTimeMillis()))
+                            .build())
+                    .submit(360, 360)
                     .get();
         } catch (InterruptedException | ExecutionException e) {
             Log.e(TAG, "failed to prepare earth image");
+            stopSelf();
             return;
         }
 
@@ -83,13 +91,26 @@ public class WatchTransferService extends IntentService {
         PutDataRequest request = PutDataRequest.create("/earth");
         request.putAsset("earth", asset);
 
-        Wearable.DataApi.putDataItem(client, request);
-
-        client.disconnect();
+        try {
+            Tasks.await(Wearable.getDataClient(this).putDataItem(request));
+        } catch (ExecutionException | InterruptedException e) {
+            Log.e(TAG, "failed to put data item", e);
+        }
 
         Log.d(TAG, "done syncing");
+        stopSelf();
+    }
 
-        MobclickAgent.onEvent(this, "watch_synced");
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        handlerThread.quit();
+    }
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
     }
 
 }

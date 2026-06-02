@@ -36,6 +36,8 @@ import ooo.oxo.apps.earth.dao.Settings;
 
 public class SettingsProvider extends ContentProvider {
 
+    private static final String TAG = "SettingsProvider";
+
     private SettingsDatabaseHelper dbHelper;
 
     @Override
@@ -60,6 +62,17 @@ public class SettingsProvider extends ContentProvider {
 
         Cursor cursor = builder.query(db, projection, null, null, null, null, null, "1");
 
+        // Log the actual values being returned
+        if (cursor != null && cursor.moveToFirst()) {
+            StringBuilder sb = new StringBuilder("query() returning: ");
+            for (int i = 0; i < cursor.getColumnCount(); i++) {
+                sb.append(cursor.getColumnName(i)).append("=").append(cursor.getString(i));
+                if (i < cursor.getColumnCount() - 1) sb.append(", ");
+            }
+            Log.e(TAG, sb.toString());
+            cursor.moveToPosition(-1); // reset to before first so consumer can iterate
+        }
+
         //noinspection ConstantConditions
         cursor.setNotificationUri(getContext().getContentResolver(), uri);
 
@@ -70,7 +83,9 @@ public class SettingsProvider extends ContentProvider {
     public int update(@NonNull Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         SQLiteDatabase db = dbHelper.getWritableDatabase();
 
+        Log.e(TAG, "update() called with values=" + values);
         int affected = db.update(SettingsContract.TABLE, values, null, null);
+        Log.e(TAG, "update() affected " + affected + " rows");
 
         //noinspection ConstantConditions
         getContext().getContentResolver().notifyChange(uri, null, false);
@@ -94,7 +109,7 @@ public class SettingsProvider extends ContentProvider {
         private static final String TAG = "SettingsDatabaseHelper";
 
         private static final String DATABASE_NAME = "settings.db";
-        private static final int DATABASE_VERSION = 3;
+        private static final int DATABASE_VERSION = 5;
 
         SettingsDatabaseHelper(Context context) {
             super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -110,6 +125,7 @@ public class SettingsProvider extends ContentProvider {
                     ", " + SettingsContract.Columns.OFFSET_L + " REAL" +
                     ", " + SettingsContract.Columns.OFFSET_S + " REAL" +
                     ", " + SettingsContract.Columns.SCALE + " REAL DEFAULT 1" +
+                    ", " + SettingsContract.Columns.CDN_CLOUD_NAME + " TEXT" +
                     ")");
 
             db.insertOrThrow(SettingsContract.TABLE, null,
@@ -131,6 +147,12 @@ public class SettingsProvider extends ContentProvider {
                 db.execSQL("ALTER TABLE " + SettingsContract.TABLE +
                         " ADD COLUMN " + SettingsContract.Columns.SCALE + " REAL DEFAULT 1");
             }
+            if (oldVersion < 4) {
+                db.execSQL("ALTER TABLE " + SettingsContract.TABLE +
+                        " ADD COLUMN " + SettingsContract.Columns.CDN_CLOUD_NAME + " TEXT");
+            }
+            // v5: removed cdn_enabled column (CDN is now the only fetch path)
+            // SQLite doesn't support DROP COLUMN before 3.35.0, so we leave it if present
         }
 
     }

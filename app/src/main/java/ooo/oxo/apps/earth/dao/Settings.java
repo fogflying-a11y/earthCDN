@@ -44,6 +44,8 @@ public class Settings {
 
     public boolean debug;
 
+    public String cdnCloudName;
+
     public static Settings fromLegacySharedState(Context context) {
         LegacyEarthSharedState sharedState = new LegacyEarthSharedState(context);
 
@@ -55,6 +57,7 @@ public class Settings {
         settings.offsetLong = 0f;
         settings.offsetShort = 0f;
         settings.scale = 1f;
+        settings.cdnCloudName = null;
 
         return settings;
     }
@@ -73,6 +76,7 @@ public class Settings {
         settings.offsetShort = cursor.getFloat(cursor.getColumnIndexOrThrow(SettingsContract.Columns.OFFSET_S));
         settings.scale = cursor.getFloat(cursor.getColumnIndexOrThrow(SettingsContract.Columns.SCALE));
         settings.debug = cursor.getInt(cursor.getColumnIndexOrThrow(SettingsContract.Columns.DEBUG)) != 0;
+        settings.cdnCloudName = cursor.getString(cursor.getColumnIndexOrThrow(SettingsContract.Columns.CDN_CLOUD_NAME));
 
         return settings;
     }
@@ -86,6 +90,7 @@ public class Settings {
         values.put(SettingsContract.Columns.OFFSET_S, offsetShort);
         values.put(SettingsContract.Columns.SCALE, scale);
         values.put(SettingsContract.Columns.DEBUG, debug ? 1 : 0);
+        values.put(SettingsContract.Columns.CDN_CLOUD_NAME, cdnCloudName);
         return values;
     }
 

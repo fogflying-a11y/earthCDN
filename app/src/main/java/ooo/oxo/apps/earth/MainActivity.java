@@ -18,6 +18,8 @@
 
 package ooo.oxo.apps.earth;
 
+import android.accounts.Account;
+import android.accounts.AccountManager;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.annotation.SuppressLint;
@@ -27,16 +29,17 @@ import android.content.SharedPreferences;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.net.ConnectivityManager;
-import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewAnimationUtils;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.databinding.DataBindingUtil;
@@ -44,25 +47,19 @@ import androidx.preference.PreferenceManager;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
-import com.umeng.analytics.MobclickAgent;
 
-import java.util.HashMap;
-import java.util.concurrent.TimeUnit;
-
+import ooo.oxo.apps.earth.account.StubAuthenticator;
 import ooo.oxo.apps.earth.dao.Settings;
 import ooo.oxo.apps.earth.databinding.MainActivityBinding;
 import ooo.oxo.apps.earth.provider.EarthsContract;
 import ooo.oxo.apps.earth.provider.SettingsContract;
 import ooo.oxo.apps.earth.view.InOutAnimationUtils;
 import ooo.oxo.apps.earth.widget.ImmersiveUtil;
-import ooo.oxo.apps.earth.widget.SystemUiVisibilityUtil;
 
 public class MainActivity extends AppCompatActivity {
 
     @SuppressWarnings("unused")
     private static final String TAG = "MainActivity";
-
-    private static final int REQUEST_SETTINGS = 1;
 
     private MainActivityBinding binding;
 
@@ -77,16 +74,19 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    private final ActivityResultLauncher<Intent> settingsLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == RESULT_OK) {
+                            refreshSettingsFromPreference();
+                        }
+                    });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (Build.VERSION.SDK_INT >= 19) {
-            SystemUiVisibilityUtil.addFlags(getWindow().getDecorView(),
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
-        }
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         binding = DataBindingUtil.setContentView(this, R.layout.main_activity);
 
@@ -151,10 +151,22 @@ public class MainActivity extends AppCompatActivity {
 
         vm.saveTo(settings);
 
+        // Preserve existing cloud_name to avoid overwriting it with null
+        Cursor cursor = getContentResolver().query(
+                SettingsContract.CONTENT_URI, null, null, null, null);
+        if (cursor != null) {
+            try {
+                Settings current = Settings.fromCursor(cursor);
+                if (current != null) {
+                    settings.cdnCloudName = current.cdnCloudName;
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+
         getContentResolver().update(SettingsContract.CONTENT_URI,
                 settings.toContentValues(), null, null);
-
-        sendOnSet(settings);
     }
 
     private void saveAndHideSettings() {
@@ -182,20 +194,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        switch (requestCode) {
-            case REQUEST_SETTINGS:
-                refreshSettingsFromPreference();
-                break;
-            default:
-                super.onActivityResult(requestCode, resultCode, data);
-                break;
-        }
-    }
-
     private boolean openAdvancedSettings() {
-        startActivityForResult(new Intent(this, SettingsActivity.class), REQUEST_SETTINGS);
+        settingsLauncher.launch(new Intent(this, SettingsActivity.class));
         return true;
     }
 
@@ -233,23 +233,21 @@ public class MainActivity extends AppCompatActivity {
         InOutAnimationUtils.animateIn(binding.action.doneHint, R.anim.main_action_hint_in);
         InOutAnimationUtils.animateIn(binding.settings, R.anim.main_settings_in);
 
-        if (Build.VERSION.SDK_INT >= 21) {
-            int width = binding.settings.getWidth();
-            int height = binding.settings.getHeight();
+        int width = binding.settings.getWidth();
+        int height = binding.settings.getHeight();
 
-            int revealOffset = getResources().getDimensionPixelOffset(R.dimen.settings_reveal_offset);
+        int revealOffset = getResources().getDimensionPixelOffset(R.dimen.settings_reveal_offset);
 
-            Animator animator = ViewAnimationUtils.createCircularReveal(
-                    binding.settings,
-                    width - revealOffset, height - revealOffset,
-                    0, Math.max(width, height));
+        Animator animator = ViewAnimationUtils.createCircularReveal(
+                binding.settings,
+                width - revealOffset, height - revealOffset,
+                0, Math.max(width, height));
 
-            binding.settings.setVisibility(View.VISIBLE);
+        binding.settings.setVisibility(View.VISIBLE);
 
-            animator.setDuration(300L);
+        animator.setDuration(300L);
 
-            animator.start();
-        }
+        animator.start();
     }
 
     private void animateOutSettings() {
@@ -260,28 +258,26 @@ public class MainActivity extends AppCompatActivity {
         InOutAnimationUtils.animateOut(binding.action.doneHint, R.anim.main_action_hint_out);
         InOutAnimationUtils.animateOut(binding.settings, R.anim.main_settings_out);
 
-        if (Build.VERSION.SDK_INT >= 21) {
-            int width = binding.settings.getWidth();
-            int height = binding.settings.getHeight();
+        int width = binding.settings.getWidth();
+        int height = binding.settings.getHeight();
 
-            int revealOffset = getResources().getDimensionPixelOffset(R.dimen.settings_reveal_offset);
+        int revealOffset = getResources().getDimensionPixelOffset(R.dimen.settings_reveal_offset);
 
-            Animator animator = ViewAnimationUtils.createCircularReveal(
-                    binding.settings,
-                    width - revealOffset, height - revealOffset,
-                    Math.max(width, height), 0);
+        Animator animator = ViewAnimationUtils.createCircularReveal(
+                binding.settings,
+                width - revealOffset, height - revealOffset,
+                Math.max(width, height), 0);
 
-            animator.setDuration(300L);
+        animator.setDuration(300L);
 
-            animator.addListener(new AnimatorListenerAdapter() {
-                @Override
-                public void onAnimationEnd(Animator animation) {
-                    binding.settings.setVisibility(View.INVISIBLE);
-                }
-            });
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                binding.settings.setVisibility(View.INVISIBLE);
+            }
+        });
 
-            animator.start();
-        }
+        animator.start();
     }
 
     private void enterEditMode() {
@@ -338,21 +334,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void sendOnSet(Settings settings) {
-        HashMap<String, String> event = new HashMap<>();
-
-        event.put("interval", String.valueOf(TimeUnit.MILLISECONDS.toMinutes(settings.interval)));
-        event.put("resolution", String.valueOf(settings.resolution));
-        event.put("wifi_only", String.valueOf(settings.wifiOnly));
-
-        MobclickAgent.onEvent(this, "set", event);
-    }
-
     @Override
     protected void onResume() {
         super.onResume();
-
-        MobclickAgent.onResume(this);
 
         getContentResolver().registerContentObserver(
                 EarthsContract.LATEST_CONTENT_URI, false, observer);
@@ -361,8 +345,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-
-        MobclickAgent.onPause(this);
 
         getContentResolver().unregisterContentObserver(observer);
     }
@@ -484,11 +466,30 @@ public class MainActivity extends AppCompatActivity {
                 if (!ContentResolver.getMasterSyncAutomatically()) {
                     promptToEnableAutoSync();
                 }
+                requestImmediateSync();
                 break;
             case "background":
                 SyncUtil.disableSync(this);
                 SyncUtil.enableBackground(this);
                 break;
+        }
+    }
+
+    private void requestImmediateSync() {
+        try {
+            AccountManager am = AccountManager.get(this);
+            Account[] accounts = am.getAccountsByType(StubAuthenticator.ACCOUNT_TYPE);
+            if (accounts.length > 0) {
+                Bundle extras = new Bundle();
+                extras.putBoolean(ContentResolver.SYNC_EXTRAS_MANUAL, true);
+                extras.putBoolean(ContentResolver.SYNC_EXTRAS_EXPEDITED, true);
+                ContentResolver.requestSync(accounts[0], EarthsContract.AUTHORITY, extras);
+                Log.d(TAG, "Requested immediate sync");
+            } else {
+                Log.w(TAG, "No account found, cannot request sync");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to request sync", e);
         }
     }
 

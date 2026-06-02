@@ -30,6 +30,7 @@
     <string name="traffic_estimated">Data usage est.: %d MB/month</string>
     <string name="wifi_only">Update via Wi-Fi only</string>
     <string name="scale_and_move">Scale and move…</string>
+    <string name="save_long_press">Hold to configure CDN</string>
     <string name="save">Press the button to save settings</string>
 
     <string name="scaling_hint">Move or pinch the earth</string>
@@ -99,5 +100,9 @@
     <string name="libraries_used">Libraries used</string>
 
     <string name="about_copied">\"%s\" is copied to your clipboard</string>
+
+    <string name="cdn_category_title">Cloudinary CDN</string>
+    <string name="cdn_cloud_name_title">Cloud Name</string>
+    <string name="cdn_cloud_name_summary">Enter your Cloudinary cloud name</string>
 
 </resources>

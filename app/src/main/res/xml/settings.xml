@@ -26,6 +26,15 @@
         android:summary="%s"
         android:title="@string/settings_update_title" />
 
+    <PreferenceCategory android:title="@string/cdn_category_title">
+
+        <EditTextPreference
+            android:key="cdn_cloud_name"
+            android:title="@string/cdn_cloud_name_title"
+            android:summary="@string/cdn_cloud_name_summary" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/settings_debug">
 
         <SwitchPreference

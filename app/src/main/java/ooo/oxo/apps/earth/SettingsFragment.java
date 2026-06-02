@@ -20,13 +20,47 @@ package ooo.oxo.apps.earth;
 
 import android.os.Bundle;
 
+import androidx.preference.EditTextPreference;
 import androidx.preference.PreferenceFragmentCompat;
 
 public class SettingsFragment extends PreferenceFragmentCompat {
 
+    private static final String TAG = "SettingsFragment";
+
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.settings, rootKey);
+        setupSummaries();
     }
 
+    private void setupSummaries() {
+        EditTextPreference cloudNamePref = findPreference("cdn_cloud_name");
+        if (cloudNamePref != null) {
+            cloudNamePref.setOnPreferenceChangeListener((preference, newValue) -> {
+                String val = (String) newValue;
+                android.util.Log.e(TAG, "cloud_name changed to: '" + val + "'");
+                preference.setSummary(val != null && !val.isEmpty() ? val : getString(R.string.cdn_cloud_name_summary));
+                // Write directly to ContentProvider (single source of truth)
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(ooo.oxo.apps.earth.provider.SettingsContract.Columns.CDN_CLOUD_NAME, val);
+                if (getContext() != null) {
+                    int affected = getContext().getContentResolver().update(
+                            ooo.oxo.apps.earth.provider.SettingsContract.CONTENT_URI, values, null, null);
+                    android.util.Log.e(TAG, "ContentProvider update affected rows: " + affected);
+
+                    // Verify by querying back
+                    android.database.Cursor cursor = getContext().getContentResolver().query(
+                            ooo.oxo.apps.earth.provider.SettingsContract.CONTENT_URI,
+                            new String[]{ooo.oxo.apps.earth.provider.SettingsContract.Columns.CDN_CLOUD_NAME},
+                            null, null, null);
+                    if (cursor != null && cursor.moveToFirst()) {
+                        String saved = cursor.getString(cursor.getColumnIndexOrThrow(ooo.oxo.apps.earth.provider.SettingsContract.Columns.CDN_CLOUD_NAME));
+                        android.util.Log.e(TAG, "Verify query returned cloud_name: '" + saved + "'");
+                        cursor.close();
+                    }
+                }
+                return true;
+            });
+        }
+    }
 }

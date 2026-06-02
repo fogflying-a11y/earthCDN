@@ -23,6 +23,7 @@ import android.content.ClipboardManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
@@ -88,8 +89,8 @@ public class AboutActivity extends AppCompatActivity {
     private class AboutClient extends WebViewClient {
 
         @Override
-        public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            final Uri uri = Uri.parse(url);
+        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            final Uri uri = request.getUrl();
             if ("copy".equals(uri.getScheme())) {
                 copy(uri.getSchemeSpecificPart());
                 return true;

@@ -18,12 +18,13 @@
 
 package ooo.oxo.apps.earth.widget;
 
-import android.annotation.TargetApi;
 import android.app.Activity;
-import android.os.Build;
-import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 public class ImmersiveUtil {
 
@@ -32,68 +33,29 @@ public class ImmersiveUtil {
     public static void enter(Activity activity) {
         activity.getWindow().addFlags(FLAG_KEEP_SCREEN_ON);
 
-        if (Build.VERSION.SDK_INT >= 19) {
-            ImmersiveUtil19.enter(activity.getWindow().getDecorView());
-        } else {
-            ImmersiveUtilBase.enter(activity.getWindow());
-        }
+        WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), false);
+        WindowInsetsControllerCompat controller =
+                WindowCompat.getInsetsController(activity.getWindow(), activity.getWindow().getDecorView());
+        controller.setSystemBarsBehavior(
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        controller.hide(WindowInsetsCompat.Type.systemBars());
     }
 
     public static void exit(Activity activity) {
         activity.getWindow().clearFlags(FLAG_KEEP_SCREEN_ON);
 
-        if (Build.VERSION.SDK_INT >= 19) {
-            ImmersiveUtil19.exit(activity.getWindow().getDecorView());
-        } else {
-            ImmersiveUtilBase.exit(activity.getWindow());
-        }
+        WindowInsetsControllerCompat controller =
+                WindowCompat.getInsetsController(activity.getWindow(), activity.getWindow().getDecorView());
+        controller.show(WindowInsetsCompat.Type.systemBars());
+        WindowCompat.setDecorFitsSystemWindows(activity.getWindow(), true);
     }
 
     public static boolean isEntered(Activity activity) {
-        if (Build.VERSION.SDK_INT >= 19) {
-            return ImmersiveUtil19.isEntered(activity.getWindow().getDecorView());
-        } else {
-            return ImmersiveUtilBase.isEntered(activity.getWindow());
-        }
-    }
-
-    private static class ImmersiveUtilBase {
-
-        private static final int FLAG_FULLSCREEN = WindowManager.LayoutParams.FLAG_FULLSCREEN;
-
-        static void enter(Window window) {
-            window.addFlags(FLAG_FULLSCREEN);
-        }
-
-        static void exit(Window window) {
-            window.clearFlags(FLAG_FULLSCREEN);
-        }
-
-        static boolean isEntered(Window window) {
-            return (window.getAttributes().flags & FLAG_FULLSCREEN) == FLAG_FULLSCREEN;
-        }
-
-    }
-
-    @TargetApi(19)
-    private static class ImmersiveUtil19 {
-
-        private static final int FLAG_IMMERSIVE = View.SYSTEM_UI_FLAG_IMMERSIVE
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_FULLSCREEN;
-
-        static void enter(View decor) {
-            SystemUiVisibilityUtil.addFlags(decor, FLAG_IMMERSIVE);
-        }
-
-        static void exit(View decor) {
-            SystemUiVisibilityUtil.clearFlags(decor, FLAG_IMMERSIVE);
-        }
-
-        static boolean isEntered(View decor) {
-            return SystemUiVisibilityUtil.hasFlags(decor, FLAG_IMMERSIVE);
-        }
-
+        WindowInsetsCompat insets = androidx.core.view.ViewCompat.getRootWindowInsets(
+                activity.getWindow().getDecorView());
+        if (insets == null) return false;
+        return !insets.isVisible(WindowInsetsCompat.Type.statusBars())
+                && !insets.isVisible(WindowInsetsCompat.Type.navigationBars());
     }
 
 }

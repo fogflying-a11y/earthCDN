@@ -44,6 +44,7 @@ public class SettingsContract {
         public static final String OFFSET_L = "offset_l";
         public static final String OFFSET_S = "offset_s";
         public static final String SCALE = "scale";
+        public static final String CDN_CLOUD_NAME = "cdn_cloud_name";
     }
 
 }

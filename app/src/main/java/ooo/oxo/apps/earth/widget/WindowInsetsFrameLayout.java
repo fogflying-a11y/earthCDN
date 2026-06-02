@@ -19,10 +19,8 @@
 package ooo.oxo.apps.earth.widget;
 
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.Rect;
-import android.os.Build;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.View;
@@ -48,43 +46,10 @@ public class WindowInsetsFrameLayout extends FrameLayout {
     public WindowInsetsFrameLayout(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         ViewCompat.setOnApplyWindowInsetsListener(this, (v, insets) ->
-                applySystemWindowInsets21(insets) ? insets.consumeSystemWindowInsets() : insets);
+                applySystemWindowInsets(insets) ? insets.consumeSystemWindowInsets() : insets);
     }
 
-    @Override
-    protected boolean fitSystemWindows(Rect insets) {
-        if (Build.VERSION.SDK_INT >= 19 && Build.VERSION.SDK_INT < 21) {
-            return applySystemWindowInsets19(insets);
-        }
-
-        return super.fitSystemWindows(insets);
-    }
-
-    @TargetApi(19)
-    private boolean applySystemWindowInsets19(Rect insets) {
-        boolean consumed = false;
-
-        for (int i = 0; i < getChildCount(); i++) {
-            View child = getChildAt(i);
-
-            if (!child.getFitsSystemWindows()) {
-                continue;
-            }
-
-            Rect childInsets = new Rect(insets);
-
-            computeInsetsWithGravity(child, childInsets);
-
-            child.setPadding(childInsets.left, childInsets.top, childInsets.right, childInsets.bottom);
-
-            consumed = true;
-        }
-
-        return consumed;
-    }
-
-    @TargetApi(21)
-    private boolean applySystemWindowInsets21(WindowInsetsCompat insets) {
+    private boolean applySystemWindowInsets(WindowInsetsCompat insets) {
         boolean consumed = false;
 
         for (int i = 0; i < getChildCount(); i++) {
