@@ -29,8 +29,7 @@
     <string name="traffic_estimated">预计流量: %d MB/月</string>
     <string name="wifi_only">只在 Wi-Fi 连接时更新</string>
     <string name="scale_and_move">缩放和移动…</string>
-    <string name="save_long_press">长按按钮进入CDN配置</string>
-    <string name="save">按下按钮完成设置</string>
+    <string name="save">长按配置CDN\n按下按钮完成设置</string>
 
     <string name="scaling_hint">移动或双指缩放地球</string>
     <string name="scaling_set">设置缩放</string>

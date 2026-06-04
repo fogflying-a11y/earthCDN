@@ -20,7 +20,6 @@ package ooo.oxo.apps.earth;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.Intent;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -52,9 +51,6 @@ public class EarthWallpaperService extends WallpaperService {
     @Override
     public void onCreate() {
         super.onCreate();
-
-        // TODO: 应该把它丢到自启动, 前提是把抓取进程独立出来即使没有壁纸也能跑
-        startService(new Intent(this, WatchSyncService.class));
     }
 
     @Override

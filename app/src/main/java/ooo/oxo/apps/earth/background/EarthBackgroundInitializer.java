@@ -22,12 +22,15 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
+import ooo.oxo.apps.earth.WatchSyncService;
+
 public class EarthBackgroundInitializer extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             EarthBackgroundService.start(context);
+            context.startService(new Intent(context, WatchSyncService.class));
         }
     }
 

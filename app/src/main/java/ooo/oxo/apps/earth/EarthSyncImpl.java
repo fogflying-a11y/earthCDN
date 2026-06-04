@@ -117,7 +117,7 @@ public class EarthSyncImpl {
         fetcher = createFetcher(settings.cdnCloudName);
 
         try {
-            Log.e(TAG, "about to fetch with resolution=" + settings.resolution + ", cloudName=" + settings.cdnCloudName);
+            Log.d(TAG, "about to fetch with resolution=" + settings.resolution + ", cloudName=" + settings.cdnCloudName);
             fetched = fetcher.fetch(settings.resolution);
             Log.d(TAG, "fetch returned: " + (fetched != null ? fetched.getAbsolutePath() : "null"));
 
@@ -152,21 +152,21 @@ public class EarthSyncImpl {
 
     @Nullable
     private Settings loadSettings() {
-        Log.e(TAG, "loadSettings() from process: " + android.os.Process.myPid());
+        Log.d(TAG, "loadSettings() from process: " + android.os.Process.myPid());
         final Cursor cursor = resolver.query(SettingsContract.CONTENT_URI,
                 null, null, null, null);
 
         if (cursor == null) {
-            Log.e(TAG, "loadSettings() cursor is null");
+            Log.w(TAG, "loadSettings() cursor is null");
             return null;
         }
 
         final Settings settings = Settings.fromCursor(cursor);
 
         if (settings == null) {
-            Log.e(TAG, "loadSettings() Settings.fromCursor returned null (no rows in DB)");
+            Log.w(TAG, "loadSettings() Settings.fromCursor returned null (no rows in DB)");
         } else {
-            Log.e(TAG, "loadSettings() interval=" + settings.interval
+            Log.d(TAG, "loadSettings() interval=" + settings.interval
                     + ", resolution=" + settings.resolution
                     + ", cdnCloudName='" + settings.cdnCloudName + "'");
         }

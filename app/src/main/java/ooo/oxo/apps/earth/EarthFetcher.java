@@ -42,6 +42,7 @@ public class EarthFetcher {
 
     private static final String TAG = "EarthFetcher";
     private static final String DEBUG_TAG = "WallpaperDebug";
+    private static final int TILE_RETRY_COUNT = 3;
 
     private static final String TILE_URL_TEMPLATE =
             "https://himawari8-dl.nict.go.jp/himawari8/img/D531106/%dd/550/%04d/%02d/%02d/%s_%d_%d.png";
@@ -137,10 +138,9 @@ public class EarthFetcher {
      * Fetch tiles via Cloudinary CDN and stitch them together.
      */
     private Bitmap fetchAndStitch(String imageId, int grid) throws Exception {
-        Log.e(DEBUG_TAG, "进入 fetchAndStitch(), imageId=" + imageId + ", grid=" + grid);
+        Log.d(DEBUG_TAG, "fetchAndStitch(), imageId=" + imageId + ", grid=" + grid);
         int fullSize = grid * 550;
         Bitmap[] tiles = new Bitmap[grid * grid];
-        List<FutureTarget<Bitmap>> futures = new ArrayList<>();
 
         if (!cdnClient.hasValidCloudName()) {
             throw new Exception("cloud_name not configured, please set it in Settings");
@@ -148,30 +148,34 @@ public class EarthFetcher {
 
         for (int y = 0; y < grid; y++) {
             for (int x = 0; x < grid; x++) {
-                int idx = y * grid + x;
                 String originUrl = buildOriginUrl(imageId, grid, x, y);
                 String cdnUrl = cdnClient.buildFetchUrl(originUrl);
-                Log.e(DEBUG_TAG, "Cloudinary Fetch URL: " + cdnUrl);
+                Log.d(DEBUG_TAG, "Cloudinary Fetch URL: " + cdnUrl);
 
                 FutureTarget<Bitmap> f = rm.asBitmap()
                         .load(cdnUrl)
                         .override(550, 550)
                         .submit();
-                futures.add(f);
                 synchronized (tileRequests) {
                     tileRequests.add(f);
                 }
             }
         }
 
-        return collectAndStitch(futures, tiles, grid, fullSize);
+        return collectAndStitch(tiles, grid, fullSize, imageId);
     }
 
     /**
-     * Collect downloaded tiles and stitch them together.
+     * Collect downloaded tiles, retry any failures, then stitch.
+     * Throws if any tile cannot be retrieved after retries.
      */
-    private Bitmap collectAndStitch(List<FutureTarget<Bitmap>> futures, Bitmap[] tiles, int grid, int fullSize) throws Exception {
-        int failCount = 0;
+    private Bitmap collectAndStitch(Bitmap[] tiles, int grid, int fullSize, String imageId) throws Exception {
+        List<FutureTarget<Bitmap>> futures;
+        synchronized (tileRequests) {
+            futures = new ArrayList<>(tileRequests);
+        }
+
+        List<Integer> failedIndices = new ArrayList<>();
         for (int i = 0; i < futures.size(); i++) {
             if (cancelled) {
                 throw new InterruptedException("fetch cancelled");
@@ -181,19 +185,46 @@ public class EarthFetcher {
                 if (tile != null && tile.getWidth() > 0) {
                     tiles[i] = tile;
                 } else {
-                    Log.e(DEBUG_TAG, "tile " + i + " is empty");
-                    tiles[i] = Bitmap.createBitmap(550, 550, Bitmap.Config.ARGB_8888);
-                    failCount++;
+                    Log.w(TAG, "tile " + i + " returned empty bitmap");
+                    failedIndices.add(i);
                 }
             } catch (Exception e) {
-                Log.e(DEBUG_TAG, "tile " + i + " failed: " + e.getMessage(), e);
-                tiles[i] = Bitmap.createBitmap(550, 550, Bitmap.Config.ARGB_8888);
-                failCount++;
+                Log.w(TAG, "tile " + i + " failed: " + e.getMessage());
+                failedIndices.add(i);
             }
         }
 
-        if (failCount == futures.size()) {
-            throw new Exception("All tiles failed to download");
+        for (int idx : failedIndices) {
+            if (cancelled) {
+                throw new InterruptedException("fetch cancelled");
+            }
+            String originUrl = buildOriginUrl(imageId, grid, idx % grid, idx / grid);
+            String cdnUrl = cdnClient.buildFetchUrl(originUrl);
+            Bitmap tile = null;
+            for (int attempt = 1; attempt <= TILE_RETRY_COUNT; attempt++) {
+                try {
+                    Log.d(TAG, "retrying tile " + idx + ", attempt " + attempt + "/" + TILE_RETRY_COUNT);
+                    FutureTarget<Bitmap> retry = rm.asBitmap()
+                            .load(cdnUrl)
+                            .override(550, 550)
+                            .submit();
+                    synchronized (tileRequests) {
+                        tileRequests.add(retry);
+                    }
+                    tile = retry.get();
+                    if (tile != null && tile.getWidth() > 0) {
+                        Log.d(TAG, "tile " + idx + " succeeded on attempt " + attempt);
+                        break;
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "retry " + attempt + "/" + TILE_RETRY_COUNT + " for tile " + idx + " failed: " + e.getMessage());
+                }
+            }
+            if (tile != null && tile.getWidth() > 0) {
+                tiles[idx] = tile;
+            } else {
+                throw new Exception("tile " + idx + " failed after " + TILE_RETRY_COUNT + " retries, aborting");
+            }
         }
 
         Bitmap composed = Bitmap.createBitmap(fullSize, fullSize, Bitmap.Config.ARGB_8888);

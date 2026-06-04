@@ -69,7 +69,7 @@ public class SettingsProvider extends ContentProvider {
                 sb.append(cursor.getColumnName(i)).append("=").append(cursor.getString(i));
                 if (i < cursor.getColumnCount() - 1) sb.append(", ");
             }
-            Log.e(TAG, sb.toString());
+            Log.d(TAG, sb.toString());
             cursor.moveToPosition(-1); // reset to before first so consumer can iterate
         }
 
@@ -83,9 +83,9 @@ public class SettingsProvider extends ContentProvider {
     public int update(@NonNull Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         SQLiteDatabase db = dbHelper.getWritableDatabase();
 
-        Log.e(TAG, "update() called with values=" + values);
+        Log.d(TAG, "update() called with values=" + values);
         int affected = db.update(SettingsContract.TABLE, values, null, null);
-        Log.e(TAG, "update() affected " + affected + " rows");
+        Log.d(TAG, "update() affected " + affected + " rows");
 
         //noinspection ConstantConditions
         getContext().getContentResolver().notifyChange(uri, null, false);
