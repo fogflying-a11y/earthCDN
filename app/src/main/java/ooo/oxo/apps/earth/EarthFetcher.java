@@ -45,7 +45,7 @@ public class EarthFetcher {
     private static final int TILE_RETRY_COUNT = 3;
 
     private static final String TILE_URL_TEMPLATE =
-            "https://himawari8.nict.go.jp/img/D531106/%dd/550/%04d/%02d/%02d/%s_%d_%d.png";
+            "https://himawari.asia/img/D531106/%dd/550/%04d/%02d/%02d/%s_%d_%d.png";
 
     private final Context context;
     private final RequestManager rm;
@@ -82,7 +82,7 @@ public class EarthFetcher {
     /**
      * Build the origin Himawari tile URL.
      * imageId format: "2026/05/29/130000"
-     * Result: https://himawari8.nict.go.jp/img/D531106/{grid}d/550/{yyyy}/{MM}/{dd}/{HHMMSS}_{x}_{y}.png
+     * Result: https://himawari.asia/img/D531106/{grid}d/550/{yyyy}/{MM}/{dd}/{HHMMSS}_{x}_{y}.png
      */
     private static String buildOriginUrl(String imageId, int grid, int x, int y) {
         String[] parts = imageId.split("/");
@@ -95,7 +95,7 @@ public class EarthFetcher {
         String gridPath = grid + "d";
 
         return String.format(Locale.US,
-                "https://himawari8.nict.go.jp/img/D531106/%s/550/%04d/%02d/%02d/%s_%d_%d.png",
+                "https://himawari.asia/img/D531106/%s/550/%04d/%02d/%02d/%s_%d_%d.png",
                 gridPath, year, month, day, hhmmss, x, y);
     }
 
