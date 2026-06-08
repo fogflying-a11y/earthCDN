@@ -2,7 +2,7 @@
 
 ## 概述
 
-在原项目 https://github.com/oxoooo/earth 的基础上，本版本主要引入了 **Cloudinary CDN 转发** 来获取 Himawari 卫星图像，取代了原有的直连 NICT 服务器方案，提升了在国内网络环境下的可用性和速度。
+在原项目 https://github.com/oxoooo/earth 的基础上，本版本主要引入了 **Cloudinary CDN 转发** 来获取 Himawari 卫星图像，原大佬的APP接口基本被jma下线了。为保活App引入Cloudinary CDN取代了原有的直连 NICT 服务器方案，提升了在国内网络环境下的可用性和速度。
 
 ---
 
