@@ -7,3 +7,21 @@
 *.iml
 *.apk
 *.jks
+*.bak
+
+# Sensitive keystore files
+/key/
+
+# Build output directories
+/app/coolapk/
+/app/release/
+
+# Claude Code config
+/.claude/
+
+# Development documentation (not for GitHub)
+/DEVELOPMENT_LOG.md
+/CDN迁移调试总结.md
+/CDN迁移调试总结.md.bak
+/继续开发 mantou 项目.txt
+/gradle.properties

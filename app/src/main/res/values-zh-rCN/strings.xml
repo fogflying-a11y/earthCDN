@@ -81,5 +81,6 @@
     <string name="cdn_category_title">Cloudinary CDN</string>
     <string name="cdn_cloud_name_title">Cloud Name</string>
     <string name="cdn_cloud_name_summary">输入您的 Cloudinary cloud name</string>
+    <string name="cdn_cloud_name_missing">尚未配置 Cloud Name。长按完成按钮 → 设置 → Cloudinary CDN 进行配置。</string>
 
 </resources>

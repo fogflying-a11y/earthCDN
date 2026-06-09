@@ -107,12 +107,10 @@ android {
     productFlavors {
         google {
             dimension "store"
-            manifestPlaceholders = [UMENG_CHANNEL: "Google"]
         }
 
         coolapk {
             dimension "store"
-            manifestPlaceholders = [UMENG_CHANNEL: "CoolApk"]
         }
     }
 

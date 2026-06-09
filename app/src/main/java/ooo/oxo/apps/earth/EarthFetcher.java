@@ -44,8 +44,8 @@ public class EarthFetcher {
     private static final String DEBUG_TAG = "WallpaperDebug";
     private static final int TILE_RETRY_COUNT = 3;
 
-    private static final String TILE_URL_TEMPLATE =
-            "https://himawari.asia/img/D531106/%dd/550/%04d/%02d/%02d/%s_%d_%d.png";
+    private static final String ORIGIN_HOST = "himawari.asia";
+    private static final String TILE_PATH_PREFIX = "img/D531106";
 
     private final Context context;
     private final RequestManager rm;
@@ -91,12 +91,9 @@ public class EarthFetcher {
         int day = Integer.parseInt(parts[2]);
         String hhmmss = parts[3]; // HHMMSS only, no date prefix
 
-        // grid level must match the Nd path prefix
-        String gridPath = grid + "d";
-
         return String.format(Locale.US,
-                "https://himawari.asia/img/D531106/%s/550/%04d/%02d/%02d/%s_%d_%d.png",
-                gridPath, year, month, day, hhmmss, x, y);
+                "https://%s/%s/%s/550/%04d/%02d/%02d/%s_%d_%d.png",
+                ORIGIN_HOST, TILE_PATH_PREFIX, grid + "d", year, month, day, hhmmss, x, y);
     }
 
     /**
@@ -131,7 +128,28 @@ public class EarthFetcher {
 
         Log.d(TAG, "saved earth image: " + outFile.getAbsolutePath() + " (" + resolution + "x" + resolution + ")");
 
+        // Clean up old cached earth images (keep only last 48h)
+        cleanOldCache(outFile.getName());
+
         return outFile;
+    }
+
+    private static final long CACHE_MAX_AGE_MS = 48L * 60 * 60 * 1000;
+
+    private void cleanOldCache(String keepFileName) {
+        final long cutoff = System.currentTimeMillis() - CACHE_MAX_AGE_MS;
+        File cacheDir = context.getCacheDir();
+        File[] cached = cacheDir.listFiles((dir, name) ->
+                name.startsWith("earth_") && name.endsWith(".png") && !name.equals(keepFileName));
+        if (cached == null) return;
+
+        for (File f : cached) {
+            if (f.lastModified() < cutoff) {
+                if (f.delete()) {
+                    Log.d(TAG, "cleaned old cache: " + f.getName());
+                }
+            }
+        }
     }
 
     /**

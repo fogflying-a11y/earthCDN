@@ -113,6 +113,12 @@ public class EarthSyncImpl {
             settings.resolution = 550;
         }
 
+        if (settings.cdnCloudName == null || settings.cdnCloudName.trim().isEmpty()) {
+            result.put(RESULT_ERROR, ERROR_IO);
+            Log.w(TAG, "skipped sync: cloud_name is not configured. Please set it in Settings → Cloudinary CDN.");
+            return result;
+        }
+
         File fetched = null;
         fetcher = createFetcher(settings.cdnCloudName);
 
@@ -161,17 +167,19 @@ public class EarthSyncImpl {
             return null;
         }
 
-        final Settings settings = Settings.fromCursor(cursor);
+        Settings settings = Settings.fromCursor(cursor);
+        cursor.close();
 
         if (settings == null) {
-            Log.w(TAG, "loadSettings() Settings.fromCursor returned null (no rows in DB)");
-        } else {
-            Log.d(TAG, "loadSettings() interval=" + settings.interval
-                    + ", resolution=" + settings.resolution
-                    + ", cdnCloudName='" + settings.cdnCloudName + "'");
+            // DB has no row yet (first launch in :sync process before main process initializes it).
+            // Return a safe default so we can still attempt sync (will fail gracefully if cloud_name is missing).
+            Log.d(TAG, "loadSettings() no row in DB, using legacy defaults");
+            settings = Settings.fromLegacySharedState(context);
         }
 
-        cursor.close();
+        Log.d(TAG, "loadSettings() interval=" + settings.interval
+                + ", resolution=" + settings.resolution
+                + ", cdnCloudName='" + settings.cdnCloudName + "'");
 
         return settings;
     }

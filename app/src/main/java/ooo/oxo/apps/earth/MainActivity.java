@@ -139,6 +139,11 @@ public class MainActivity extends AppCompatActivity {
 
         vm.loadFrom(settings);
 
+        // Check if cloud_name is configured
+        if (settings.cdnCloudName == null || settings.cdnCloudName.trim().isEmpty()) {
+            Toast.makeText(this, R.string.cdn_cloud_name_missing, Toast.LENGTH_LONG).show();
+        }
+
         if (isFromSettings() || shouldPromptToChangeWallpaper()) {
             showSettings();
         }
