@@ -82,4 +82,85 @@
 - 修复"将会**已**最低分辨率"→ "将会**以**最低分辨率"错别字
 - 关于页增加说明文字：基于 Claude Code 添加 CDN 功能
 - "卫星影像来自" 更新为 "卫星影像来自向日葵9号卫星，经 CloudinaryCDN 获取"
+- "保存按钮上方" 新增 "长按按钮进入 CDN 配置" 提示（中英文双语）
+
+---
+
+## 后续修复（2026-06-27）
+
+### 11. 时间戳获取方式改进
+
+**文件**：[EarthFetcher.java](app/src/main/java/ooo/oxo/apps/earth/EarthFetcher.java)
+
+**问题**：原逻辑在本地通过 `floor(UTC - 90min, 整小时)` 盲猜时间戳，但 NICT 实际每 10 分钟更新一帧（非整点），导致常下载到过时图像或空结果。
+
+**修复**：
+- 新增 `getLatestImageId()` 方法，请求 `himawari.asia/img/D531106/latest.json` 获取**精确的最新可用帧时间戳**
+- 删除旧的 `getQuantizedImageId()` 本地时间计算方法
+- API 返回失败时抛出异常，由上层调度器统一处理重试
+- 移除不再需要的 `Calendar`、`TimeZone` 导入
+
+**缓存键变化**：
+- 旧：`earth_2026_06_27_140000.png`（1 个/小时，盲猜）
+- 新：`earth_2026_06_27_142000.png`（1 个/10 分钟，精确匹配源站）
+
+### 12. BackgroundService 调度 Bug 修复
+
+**文件**：[EarthBackgroundService.java](app/src/main/java/ooo/oxo/apps/earth/background/EarthBackgroundService.java)
+
+**问题 1（严重）**：`run()` 同步成功后不再调用 `schedule()`，导致服务在首次同步完成后**静默停止**，不再定期更新壁纸。
+
+**问题 2（严重）**：`schedule()` 方法硬编码 10 分钟，用户在主界面通过滑块设置的更新间隔（`settings.interval`）在 BackgroundService 模式下**完全失效**。
+
+**修复**：
+- `run()` 方法末尾统一调用 `schedule()`，无论同步成功或失败均调度下一次运行
+- 新增 `getIntervalMs()` 方法，从 ContentProvider 读取用户设置的更新间隔，兜底默认值 10 分钟
+- 新增 `TAG` 常量用于日志输出
+- 同步失败时通知栏显示 `"Last update: HH:MM (failed)"`（修复前为 null，用户无法感知失败）
+
+**修复后两条更新路径的行为**：
+
+| 路径 | `settings.interval` 是否生效 |
+|------|---------------------------|
+| SyncAdapter（系统调度）| ✅ 通过 `delayUntil` 告知系统 |
+| BackgroundService（前台服务）| ✅ 通过 `getIntervalMs()` 读取并调度 |
+
+### 13. Android Studio Gradle 同步错误 Workaround
+
+**文件**：[build.gradle](build.gradle)（根项目）
+
+**问题**：Android Studio（特定版本）在 Gradle 同步/构建时会错误地在子项目（`:app`、`:wear`）上调用只存在于根项目的任务，导致构建失败：
+
+```
+Task 'wrapper' not found in project ':app'.
+Task 'prepareKotlinBuildScriptModel' not found in project ':app'.
+```
+
+CLI 构建（`./gradlew :app:assembleGoogleDebug`）不受影响。
+
+**修复**：在根 `build.gradle` 的 `subprojects` 块中为所有子项目注册这两个任务：
+
+```groovy
+subprojects {
+    // `wrapper` 任务只存在于根项目；委托给根项目执行
+    task wrapper {
+        dependsOn rootProject.tasks.wrapper
+    }
+
+    // Android Studio 的 Kotlin 插件同步时会调用此任务；
+    // 本项目使用 Groovy DSL，注册为空操作即可
+    task prepareKotlinBuildScriptModel {
+        doLast {}
+    }
+}
+```
+
+> 此 workaround 可在升级 Android Studio 后尝试移除。如不再出现相关错误，可安全删除该 `subprojects` 块。
+
+### 14. 其他调整
+
+- 根 `build.gradle` 中 Gradle wrapper 相关文件自动更新（`validateDistributionUrl=true` 等新配置）
+- `食用指南.md` 重写：新增「更新机制说明」章节，补充双模式、缓存策略、常见问题等
+- `README.md` 重写：反映当前完整功能特性、技术栈版本、致谢信息
+
 - 保存按钮上方新增 "长按按钮进入 CDN 配置" 提示（中英文双语）
