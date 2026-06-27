@@ -25,6 +25,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.database.Cursor;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -42,6 +43,8 @@ import java.util.concurrent.TimeUnit;
 
 import ooo.oxo.apps.earth.EarthSyncImpl;
 import ooo.oxo.apps.earth.R;
+import ooo.oxo.apps.earth.dao.Settings;
+import ooo.oxo.apps.earth.provider.SettingsContract;
 
 import static android.os.PowerManager.PARTIAL_WAKE_LOCK;
 import static ooo.oxo.apps.earth.EarthSyncImpl.RESULT_ERROR;
@@ -49,6 +52,7 @@ import static ooo.oxo.apps.earth.EarthSyncImpl.RESULT_INSERTS;
 
 public class EarthBackgroundService extends Service {
 
+    private static final String TAG = "EarthBgService";
     private static final int NOTIFICATION_ID = 1;
     private static final String NOTIFICATION_CHANNEL = "background";
 
@@ -134,14 +138,12 @@ public class EarthBackgroundService extends Service {
     private void run() {
         final Map<String, Long> synced = syncer.sync(false);
 
-        if (synced.containsKey(RESULT_ERROR)) {
-            schedule();
-            return;
-        }
-
         String lastUpdate = null;
 
-        if (synced.containsKey(RESULT_INSERTS)) {
+        if (synced.containsKey(RESULT_ERROR)) {
+            lastUpdate = getString(R.string.background_summary,
+                    DateFormat.getInstance().format(new Date())) + " (failed)";
+        } else if (synced.containsKey(RESULT_INSERTS)) {
             final long insets = synced.get(RESULT_INSERTS);
             if (insets > 0) {
                 lastUpdate = getString(R.string.background_summary,
@@ -152,10 +154,32 @@ public class EarthBackgroundService extends Service {
         nm.notify(NOTIFICATION_ID, createNotification()
                 .setContentText(lastUpdate)
                 .build());
+
+        // Always schedule next run (success or failure) using user-configured interval
+        schedule();
     }
 
     private void schedule() {
-        handler.postDelayed(this::run, TimeUnit.MINUTES.toMillis(10));
+        handler.postDelayed(this::run, getIntervalMs());
+    }
+
+    /**
+     * Read the user-configured update interval from the ContentProvider.
+     * Falls back to 10 minutes if the value cannot be read.
+     */
+    private long getIntervalMs() {
+        try (Cursor cursor = getContentResolver().query(
+                SettingsContract.CONTENT_URI, null, null, null, null)) {
+            if (cursor != null && cursor.moveToNext()) {
+                Settings settings = Settings.fromCursor(cursor);
+                if (settings != null && settings.interval > 0) {
+                    return settings.interval;
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "failed to read interval, using default", e);
+        }
+        return TimeUnit.MINUTES.toMillis(10);
     }
 
     private NotificationCompat.Builder createNotification() {

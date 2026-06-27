@@ -31,10 +31,8 @@ import com.bumptech.glide.request.FutureTarget;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
-import java.util.TimeZone;
 
 import ooo.oxo.apps.earth.cdn.CloudinaryClient;
 
@@ -61,22 +59,33 @@ public class EarthFetcher {
     }
 
     /**
-     * Calculate the quantized Himawari target timestamp.
-     * UTC - 1.5 hours, then floor to the nearest whole hour.
-     * Returns format: "2026/05/29/130000"
+     * Fetch the latest image timestamp from himawari.asia.
+     * Returns format: "2026/06/26/062000"
+     * Returns null on failure.
      */
-    public static String getQuantizedImageId() {
-        Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-        cal.add(Calendar.MINUTE, -90); // UTC - 1.5 hours
-        cal.set(Calendar.MINUTE, 0);
-        cal.set(Calendar.SECOND, 0);
-        cal.set(Calendar.MILLISECOND, 0);
-        // Format: yyyy/MM/dd/HH0000
-        return String.format(Locale.US, "%04d/%02d/%02d/%02d0000",
-                cal.get(Calendar.YEAR),
-                cal.get(Calendar.MONTH) + 1,
-                cal.get(Calendar.DAY_OF_MONTH),
-                cal.get(Calendar.HOUR_OF_DAY));
+    public static String getLatestImageId() {
+        try {
+            java.net.URL url = new java.net.URL("https://himawari.asia/img/D531106/latest.json");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            if (conn.getResponseCode() != 200) return null;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(conn.getInputStream()))) {
+                String json = reader.readLine();
+                // {"date":"2026-06-26 06:20:00","file":"..."}
+                int start = json.indexOf("\"date\":\"") + 8;
+                int end = json.indexOf("\"", start);
+                if (start < 8 || end < 0) return null;
+                String dateStr = json.substring(start, end);
+                return dateStr.replace("-", "/")
+                              .replace(":", "")
+                              .replace(" ", "/");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "API failed to fetch latest", e);
+            return null;
+        }
     }
 
     /**
@@ -104,11 +113,14 @@ public class EarthFetcher {
         cancelled = false;
         tileRequests.clear();
 
-        // Step 1: Calculate quantized timestamp
-        String imageId = getQuantizedImageId();
-        Log.d(TAG, "quantized image ID: " + imageId);
+        // Step 1: Fetch latest timestamp from API
+        String imageId = getLatestImageId();
+        if (imageId == null) {
+            throw new Exception("failed to fetch latest timestamp from API");
+        }
+        Log.d(TAG, "latest image ID: " + imageId);
 
-        // Check file cache to avoid re-downloading within the same hour
+        // Check file cache to avoid re-downloading the same frame
         File outFile = new File(context.getCacheDir(), "earth_" + imageId.replace("/", "_") + ".png");
         if (outFile.exists()) {
             Log.d(TAG, "reusing cached file: " + outFile.getAbsolutePath());

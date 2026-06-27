@@ -55,6 +55,24 @@ allprojects {
     }
 }
 
+// Workaround: Android Studio (certain versions) may invoke missing tasks on
+// subprojects during Gradle sync. We register these tasks as no-ops here.
+//
+// 1. `:app:wrapper` → delegates to root `:wrapper`
+//    (wrapper task only exists in root project by default)
+// 2. `:app:prepareKotlinBuildScriptModel` → no-op
+//    (Android Studio's Kotlin plugin invokes this for IDE sync;
+//     the real task comes from kotlin-dsl which is not applicable here)
+subprojects {
+    task wrapper {
+        dependsOn rootProject.tasks.wrapper
+    }
+
+    task prepareKotlinBuildScriptModel {
+        doLast {}
+    }
+}
+
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
