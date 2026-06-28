@@ -82,5 +82,11 @@
     <string name="cdn_cloud_name_title">Cloud Name</string>
     <string name="cdn_cloud_name_summary">输入您的 Cloudinary cloud name</string>
     <string name="cdn_cloud_name_missing">尚未配置 Cloud Name。长按完成按钮 → 设置 → Cloudinary CDN 进行配置。</string>
+    <string name="cdn_test_title">测试 CDN 连接</string>
+    <string name="cdn_test_summary">验证您的 Cloudinary 配置是否正常</string>
+    <string name="cdn_test_testing">测试中…</string>
+
+    <string name="last_sync">上次同步: %s</string>
+    <string name="last_sync_never">尚未同步</string>
 
 </resources>

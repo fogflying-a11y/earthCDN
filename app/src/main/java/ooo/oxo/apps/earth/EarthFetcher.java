@@ -41,6 +41,8 @@ public class EarthFetcher {
     private static final String TAG = "EarthFetcher";
     private static final String DEBUG_TAG = "WallpaperDebug";
     private static final int TILE_RETRY_COUNT = 3;
+    private static final int API_RETRY_COUNT = 3;
+    private static final long API_RETRY_BASE_DELAY_MS = 1000;
 
     private static final String ORIGIN_HOST = "himawari.asia";
     private static final String TILE_PATH_PREFIX = "img/D531106";
@@ -59,32 +61,64 @@ public class EarthFetcher {
     }
 
     /**
-     * Fetch the latest image timestamp from himawari.asia.
+     * Fetch the latest image timestamp from himawari.asia with retry.
      * Returns format: "2026/06/26/062000"
-     * Returns null on failure.
+     * Returns null after all retries exhausted.
      */
     public static String getLatestImageId() {
-        try {
-            java.net.URL url = new java.net.URL("https://himawari.asia/img/D531106/latest.json");
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
-            if (conn.getResponseCode() != 200) return null;
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(conn.getInputStream()))) {
-                String json = reader.readLine();
-                // {"date":"2026-06-26 06:20:00","file":"..."}
-                int start = json.indexOf("\"date\":\"") + 8;
-                int end = json.indexOf("\"", start);
-                if (start < 8 || end < 0) return null;
-                String dateStr = json.substring(start, end);
-                return dateStr.replace("-", "/")
-                              .replace(":", "")
-                              .replace(" ", "/");
+        for (int attempt = 1; attempt <= API_RETRY_COUNT; attempt++) {
+            try {
+                String result = fetchLatestImageIdOnce();
+                if (result != null) {
+                    if (attempt > 1) {
+                        Log.d(TAG, "API succeeded on attempt " + attempt);
+                    }
+                    return result;
+                }
+                Log.w(TAG, "API returned null on attempt " + attempt + "/" + API_RETRY_COUNT);
+            } catch (Exception e) {
+                Log.w(TAG, "API failed on attempt " + attempt + "/" + API_RETRY_COUNT + ": " + e.getMessage());
             }
-        } catch (Exception e) {
-            Log.e(TAG, "API failed to fetch latest", e);
-            return null;
+            if (attempt < API_RETRY_COUNT) {
+                long delay = API_RETRY_BASE_DELAY_MS * (1L << (attempt - 1));
+                Log.d(TAG, "retrying API in " + delay + "ms...");
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    Log.e(TAG, "API retry interrupted", ie);
+                    return null;
+                }
+            }
+        }
+        Log.e(TAG, "API failed after " + API_RETRY_COUNT + " attempts");
+        return null;
+    }
+
+    private static String fetchLatestImageIdOnce() throws Exception {
+        java.net.URL url = new java.net.URL("https://himawari.asia/img/D531106/latest.json");
+        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(10000);
+        if (conn.getResponseCode() != 200) {
+            conn.disconnect();
+            throw new Exception("HTTP " + conn.getResponseCode());
+        }
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(conn.getInputStream()))) {
+            String json = reader.readLine();
+            // {"date":"2026-06-26 06:20:00","file":"..."}
+            int start = json.indexOf("\"date\":\"") + 8;
+            int end = json.indexOf("\"", start);
+            if (start < 8 || end < 0) {
+                throw new Exception("malformed JSON: " + json);
+            }
+            String dateStr = json.substring(start, end);
+            return dateStr.replace("-", "/")
+                          .replace(":", "")
+                          .replace(" ", "/");
+        } finally {
+            conn.disconnect();
         }
     }
 

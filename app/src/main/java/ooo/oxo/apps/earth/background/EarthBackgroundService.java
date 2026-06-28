@@ -141,8 +141,11 @@ public class EarthBackgroundService extends Service {
         String lastUpdate = null;
 
         if (synced.containsKey(RESULT_ERROR)) {
-            lastUpdate = getString(R.string.background_summary,
-                    DateFormat.getInstance().format(new Date())) + " (failed)";
+            long errorCode = synced.get(RESULT_ERROR);
+            String time = DateFormat.getInstance().format(new Date());
+            String detail = errorToDetail(errorCode);
+            lastUpdate = getString(R.string.background_summary, time) + " (" + detail + ")";
+            android.util.Log.w(TAG, "sync failed, code=" + errorCode + ", detail=" + detail);
         } else if (synced.containsKey(RESULT_INSERTS)) {
             final long insets = synced.get(RESULT_INSERTS);
             if (insets > 0) {
@@ -157,6 +160,15 @@ public class EarthBackgroundService extends Service {
 
         // Always schedule next run (success or failure) using user-configured interval
         schedule();
+    }
+
+    private String errorToDetail(long code) {
+        if (code == EarthSyncImpl.ERROR_CDN_NOT_CONFIGURED) return "CDN not configured";
+        if (code == EarthSyncImpl.ERROR_API_FAILED) return "API failed";
+        if (code == EarthSyncImpl.ERROR_TILE_FETCH_FAILED) return "tile download failed";
+        if (code == EarthSyncImpl.ERROR_SKIPPED_METERED) return "skipped (metered network)";
+        if (code == EarthSyncImpl.ERROR_DB) return "database error";
+        return "error";
     }
 
     private void schedule() {

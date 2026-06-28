@@ -362,6 +362,27 @@ public class MainActivity extends AppCompatActivity {
                 .error(R.drawable.preview)
                 .diskCacheStrategy(DiskCacheStrategy.NONE)
                 .into(binding.earth.earth);
+
+        updateLastSyncSubtitle();
+    }
+
+    private void updateLastSyncSubtitle() {
+        try (Cursor cursor = getContentResolver().query(
+                EarthsContract.LATEST_CONTENT_URI, null, null, null, null)) {
+            if (cursor != null && cursor.moveToNext()) {
+                ooo.oxo.apps.earth.dao.Earth earth = ooo.oxo.apps.earth.dao.Earth.fromCursor(cursor);
+                if (earth != null && earth.fetchedAt != null) {
+                    java.text.DateFormat df = java.text.DateFormat.getDateTimeInstance(
+                            java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT);
+                    binding.toolbar.toolbar.setSubtitle(
+                            getString(R.string.last_sync, df.format(earth.fetchedAt)));
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "failed to query last sync time", e);
+        }
+        binding.toolbar.toolbar.setSubtitle(getString(R.string.last_sync_never));
     }
 
     @Override

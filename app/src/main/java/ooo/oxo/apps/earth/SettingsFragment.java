@@ -18,10 +18,16 @@
 
 package ooo.oxo.apps.earth;
 
+import android.database.Cursor;
 import android.os.Bundle;
+import android.widget.Toast;
 
 import androidx.preference.EditTextPreference;
+import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
+
+import ooo.oxo.apps.earth.cdn.CloudinaryClient;
+import ooo.oxo.apps.earth.provider.SettingsContract;
 
 public class SettingsFragment extends PreferenceFragmentCompat {
 
@@ -31,6 +37,7 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
         setPreferencesFromResource(R.xml.settings, rootKey);
         setupSummaries();
+        setupTestConnection();
     }
 
     private void setupSummaries() {
@@ -40,16 +47,85 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 String val = (String) newValue;
                 android.util.Log.d(TAG, "cloud_name changed to: '" + val + "'");
                 preference.setSummary(val != null && !val.isEmpty() ? val : getString(R.string.cdn_cloud_name_summary));
-                // Write directly to ContentProvider (single source of truth)
-                android.content.ContentValues values = new android.content.ContentValues();
-                values.put(ooo.oxo.apps.earth.provider.SettingsContract.Columns.CDN_CLOUD_NAME, val);
-                if (getContext() != null) {
-                    int affected = getContext().getContentResolver().update(
-                            ooo.oxo.apps.earth.provider.SettingsContract.CONTENT_URI, values, null, null);
-                    android.util.Log.d(TAG, "ContentProvider update affected rows: " + affected);
-                }
+                syncToContentProvider(SettingsContract.Columns.CDN_CLOUD_NAME, val);
                 return true;
             });
         }
+
+        androidx.preference.SwitchPreference debugPref = findPreference("debug");
+        if (debugPref != null) {
+            debugPref.setOnPreferenceChangeListener((preference, newValue) -> {
+                Boolean val = (Boolean) newValue;
+                android.util.Log.d(TAG, "debug changed to: " + val);
+                // Write debug flag file FIRST (synchronous I/O).
+                // The ContentProvider observer in :wallpaper process triggers draw(),
+                // which reads this file. Writing first ensures the file is on disk
+                // before the observer fires.
+                if (getContext() != null) {
+                    ooo.oxo.apps.earth.EarthWallpaperService.writeDebugFlag(getContext(), val);
+                }
+                syncToContentProvider(SettingsContract.Columns.DEBUG, val ? 1 : 0);
+                return true;
+            });
+        }
+    }
+
+    private void syncToContentProvider(String column, Object value) {
+        if (getContext() == null) return;
+        android.content.ContentValues values = new android.content.ContentValues();
+        if (value instanceof Integer) {
+            values.put(column, (Integer) value);
+        } else if (value instanceof String) {
+            values.put(column, (String) value);
+        } else if (value instanceof Boolean) {
+            values.put(column, ((Boolean) value) ? 1 : 0);
+        }
+        int affected = getContext().getContentResolver().update(
+                SettingsContract.CONTENT_URI, values, null, null);
+        android.util.Log.d(TAG, "ContentProvider update " + column + " affected rows: " + affected);
+    }
+
+    private void setupTestConnection() {
+        Preference testPref = findPreference("cdn_test_connection");
+        if (testPref == null) return;
+
+        testPref.setOnPreferenceClickListener(preference -> {
+            testPref.setEnabled(false);
+            testPref.setSummary(R.string.cdn_test_testing);
+
+            new Thread(() -> {
+                String cloudName = readCloudName();
+                CloudinaryClient client = new CloudinaryClient(cloudName);
+                CloudinaryClient.TestResult result = client.testConnection();
+
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        testPref.setEnabled(true);
+                        testPref.setSummary(result.message);
+                        Toast.makeText(getContext(),
+                                result.success ? result.message : "✗ " + result.message,
+                                result.success ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG)
+                                .show();
+                    });
+                }
+            }).start();
+            return true;
+        });
+    }
+
+    private String readCloudName() {
+        if (getContext() == null) return null;
+        try (Cursor cursor = getContext().getContentResolver().query(
+                SettingsContract.CONTENT_URI, null, null, null, null)) {
+            if (cursor != null && cursor.moveToNext()) {
+                int idx = cursor.getColumnIndex(SettingsContract.Columns.CDN_CLOUD_NAME);
+                if (idx >= 0) {
+                    return cursor.getString(idx);
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "failed to read cloud_name", e);
+        }
+        return null;
     }
 }

@@ -33,6 +33,11 @@
             android:title="@string/cdn_cloud_name_title"
             android:summary="@string/cdn_cloud_name_summary" />
 
+        <Preference
+            android:key="cdn_test_connection"
+            android:title="@string/cdn_test_title"
+            android:summary="@string/cdn_test_summary" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/settings_debug">

@@ -49,12 +49,17 @@ public class EarthSyncImpl {
     private static final String TAG = "EarthSyncImpl";
 
     public static final String RESULT_ERROR = "error";
+    public static final String RESULT_ERROR_MESSAGE = "error_message";
     public static final String RESULT_DELAY_UNTIL = "delay_until";
     public static final String RESULT_INSERTS = "inserts";
     public static final String RESULT_DELETES = "deletes";
 
     public static final long ERROR_DB = 1L;
     public static final long ERROR_IO = 2L;
+    public static final long ERROR_CDN_NOT_CONFIGURED = 3L;
+    public static final long ERROR_API_FAILED = 4L;
+    public static final long ERROR_TILE_FETCH_FAILED = 5L;
+    public static final long ERROR_SKIPPED_METERED = 6L;
 
     private final Context context;
 
@@ -93,6 +98,7 @@ public class EarthSyncImpl {
 
         if (settings == null) {
             result.put(RESULT_ERROR, ERROR_DB);
+            result.put(RESULT_ERROR_MESSAGE, 0L);
             Log.e(TAG, "skipped sync since impossible null settings");
             return result;
         }
@@ -100,6 +106,7 @@ public class EarthSyncImpl {
         final boolean metered = ConnectivityManagerCompat.isActiveNetworkMetered(cm);
 
         if (!manual && settings.wifiOnly && metered) {
+            result.put(RESULT_ERROR, ERROR_SKIPPED_METERED);
             Log.d(TAG, "skipped sync until in non-metered connection (wifiOnly=" + settings.wifiOnly + ", metered=" + metered + ")");
             return result;
         }
@@ -114,7 +121,7 @@ public class EarthSyncImpl {
         }
 
         if (settings.cdnCloudName == null || settings.cdnCloudName.trim().isEmpty()) {
-            result.put(RESULT_ERROR, ERROR_IO);
+            result.put(RESULT_ERROR, ERROR_CDN_NOT_CONFIGURED);
             Log.w(TAG, "skipped sync: cloud_name is not configured. Please set it in Settings → Cloudinary CDN.");
             return result;
         }
@@ -142,9 +149,22 @@ public class EarthSyncImpl {
 
             Log.d(TAG, "done fetching earth, with " + cleaned + " outdated cleaned. next sync: "
                     + new Date(syncUntil));
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
             result.put(RESULT_ERROR, ERROR_IO);
-            Log.e(TAG, "failed fetching earth", e);
+            Thread.currentThread().interrupt();
+            Log.w(TAG, "sync interrupted", e);
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            long errorCode;
+            if (msg != null && msg.contains("latest timestamp")) {
+                errorCode = ERROR_API_FAILED;
+            } else if (msg != null && msg.contains("tile")) {
+                errorCode = ERROR_TILE_FETCH_FAILED;
+            } else {
+                errorCode = ERROR_IO;
+            }
+            result.put(RESULT_ERROR, errorCode);
+            Log.e(TAG, "failed fetching earth (code=" + errorCode + "): " + msg, e);
         }
 
         return result;

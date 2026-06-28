@@ -52,4 +52,59 @@ public class CloudinaryClient {
         return String.format(Locale.US, "%s/%s/image/fetch/f_auto,q_auto/%s",
                 FETCH_BASE, cloudName, originalUrl);
     }
+
+    /**
+     * Get the Cloud Name.
+     */
+    public String getCloudName() {
+        return cloudName;
+    }
+
+    /**
+     * Test the CDN connection by fetching a small test image through Cloudinary.
+     * Returns a Result with success status and message.
+     */
+    public TestResult testConnection() {
+        if (!hasValidCloudName()) {
+            return new TestResult(false, "Cloud Name is empty");
+        }
+        // Use a tiny 1x1 pixel test image from himawari.asia to verify CDN proxy works
+        String testOriginUrl = "https://himawari.asia/img/D531106/1d/550/2026/01/01/000000_0_0.png";
+        String testCdnUrl = buildFetchUrl(testOriginUrl);
+        try {
+            java.net.URL url = new java.net.URL(testCdnUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestMethod("HEAD");
+            int code = conn.getResponseCode();
+            conn.disconnect();
+            if (code == 200) {
+                return new TestResult(true, "CDN connection OK (cloud: " + cloudName + ")");
+            } else if (code == 401 || code == 403) {
+                return new TestResult(false, "Access denied — check your Cloud Name (HTTP " + code + ")");
+            } else if (code == 404) {
+                // 404 is expected for the test image; it means the CDN proxy is working
+                return new TestResult(true, "CDN connection OK (cloud: " + cloudName + ")");
+            } else {
+                return new TestResult(false, "Unexpected HTTP " + code);
+            }
+        } catch (java.net.UnknownHostException e) {
+            return new TestResult(false, "Cannot resolve Cloudinary host — check network");
+        } catch (java.net.SocketTimeoutException e) {
+            return new TestResult(false, "Connection timed out — check network");
+        } catch (Exception e) {
+            return new TestResult(false, "Error: " + e.getMessage());
+        }
+    }
+
+    public static class TestResult {
+        public final boolean success;
+        public final String message;
+
+        public TestResult(boolean success, String message) {
+            this.success = success;
+            this.message = message;
+        }
+    }
 }

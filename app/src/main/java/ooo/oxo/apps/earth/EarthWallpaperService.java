@@ -48,6 +48,35 @@ import ooo.oxo.apps.earth.provider.SettingsContract;
 
 public class EarthWallpaperService extends WallpaperService {
 
+    private static final String DEBUG_FLAG_FILE = "debug_mode";
+
+    /**
+     * Write the debug flag to a file using synchronous I/O.
+     * This ensures cross-process visibility before the ContentProvider observer fires.
+     * Must be called BEFORE ContentProvider.update() in the caller.
+     */
+    public static void writeDebugFlag(Context context, boolean enabled) {
+        try (java.io.FileOutputStream fos = context.openFileOutput(DEBUG_FLAG_FILE, Context.MODE_PRIVATE)) {
+            fos.write(enabled ? new byte[]{'1'} : new byte[]{'0'});
+            fos.getFD().sync();
+        } catch (Exception e) {
+            Log.w("EarthWallpaperService", "failed to write debug flag", e);
+        }
+    }
+
+    /**
+     * Read the debug flag from a file using synchronous I/O.
+     * Returns false if the file doesn't exist (default).
+     */
+    public static boolean readDebugFlag(Context context) {
+        try (java.io.FileInputStream fis = context.openFileInput(DEBUG_FLAG_FILE)) {
+            int b = fis.read();
+            return b == '1';
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -72,10 +101,18 @@ public class EarthWallpaperService extends WallpaperService {
         private TextView overlayFetchedAt;
         private TextView overlayImageSize;
 
-        private final ContentObserver observer = new ContentObserver(null) {
+        private final ContentObserver earthObserver = new ContentObserver(null) {
             @Override
             public void onChange(boolean selfChange) {
                 Log.d(TAG, "new earth ready, drawing...");
+                draw();
+            }
+        };
+
+        private final ContentObserver settingsObserver = new ContentObserver(null) {
+            @Override
+            public void onChange(boolean selfChange) {
+                Log.d(TAG, "settings changed, redrawing...");
                 draw();
             }
         };
@@ -107,9 +144,12 @@ public class EarthWallpaperService extends WallpaperService {
             if (visible) {
                 draw();
                 getContentResolver().registerContentObserver(
-                        EarthsContract.LATEST_CONTENT_URI, false, observer);
+                        EarthsContract.LATEST_CONTENT_URI, false, earthObserver);
+                getContentResolver().registerContentObserver(
+                        SettingsContract.CONTENT_URI, false, settingsObserver);
             } else {
-                getContentResolver().unregisterContentObserver(observer);
+                getContentResolver().unregisterContentObserver(earthObserver);
+                getContentResolver().unregisterContentObserver(settingsObserver);
             }
         }
 
@@ -175,7 +215,9 @@ public class EarthWallpaperService extends WallpaperService {
 
                 Earth metadata = loadLatestEarthMetadata();
                 if (metadata != null) {
-                    fetchedAt = metadata.fetchedAt.toString();
+                    java.text.DateFormat df = java.text.DateFormat.getDateTimeInstance(
+                            java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT);
+                    fetchedAt = df.format(metadata.fetchedAt);
 
                     final File file = new File(metadata.file);
                     if (file.isFile()) {
@@ -234,6 +276,13 @@ public class EarthWallpaperService extends WallpaperService {
             Settings settings = Settings.fromCursor(cursor);
 
             cursor.close();
+
+            // Read debug flag via synchronous file I/O.
+            // SharedPreferences has per-process memory caching that causes stale reads
+            // across processes (:wallpaper vs main). This file is written synchronously
+            // by SettingsFragment BEFORE the ContentProvider update, so by the time the
+            // settingsObserver triggers draw(), the file already has the new value.
+            settings.debug = readDebugFlag(EarthWallpaperService.this);
 
             return settings;
         }
