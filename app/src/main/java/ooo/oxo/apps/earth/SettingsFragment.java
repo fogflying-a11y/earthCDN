@@ -46,7 +46,11 @@ public class SettingsFragment extends PreferenceFragmentCompat {
             cloudNamePref.setOnPreferenceChangeListener((preference, newValue) -> {
                 String val = (String) newValue;
                 android.util.Log.d(TAG, "cloud_name changed to: '" + val + "'");
-                preference.setSummary(val != null && !val.isEmpty() ? val : getString(R.string.cdn_cloud_name_summary));
+                if (val != null && !val.isEmpty()) {
+                    preference.setSummary(val);
+                } else {
+                    preference.setSummary(getString(R.string.cdn_cloud_name_summary));
+                }
                 syncToContentProvider(SettingsContract.Columns.CDN_CLOUD_NAME, val);
                 return true;
             });

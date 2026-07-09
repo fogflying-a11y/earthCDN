@@ -121,9 +121,7 @@ public class EarthSyncImpl {
         }
 
         if (settings.cdnCloudName == null || settings.cdnCloudName.trim().isEmpty()) {
-            result.put(RESULT_ERROR, ERROR_CDN_NOT_CONFIGURED);
-            Log.w(TAG, "skipped sync: cloud_name is not configured. Please set it in Settings → Cloudinary CDN.");
-            return result;
+            Log.i(TAG, "no cloud_name configured, will use direct connection to himawari.asia");
         }
 
         File fetched = null;

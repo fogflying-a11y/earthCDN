@@ -199,25 +199,29 @@ public class EarthFetcher {
     }
 
     /**
-     * Fetch tiles via Cloudinary CDN and stitch them together.
+     * Fetch tiles via Cloudinary CDN (if configured) or direct from himawari.asia,
+     * then stitch them together.
      */
     private Bitmap fetchAndStitch(String imageId, int grid) throws Exception {
         Log.d(DEBUG_TAG, "fetchAndStitch(), imageId=" + imageId + ", grid=" + grid);
         int fullSize = grid * 550;
         Bitmap[] tiles = new Bitmap[grid * grid];
 
-        if (!cdnClient.hasValidCloudName()) {
-            throw new Exception("cloud_name not configured, please set it in Settings");
+        final boolean directMode = !cdnClient.hasValidCloudName();
+        if (directMode) {
+            Log.i(TAG, "no cloud_name configured, using direct connection to himawari.asia");
+        } else {
+            Log.i(TAG, "using Cloudinary CDN (cloud: " + cdnClient.getCloudName() + ")");
         }
 
         for (int y = 0; y < grid; y++) {
             for (int x = 0; x < grid; x++) {
                 String originUrl = buildOriginUrl(imageId, grid, x, y);
-                String cdnUrl = cdnClient.buildFetchUrl(originUrl);
-                Log.d(DEBUG_TAG, "Cloudinary Fetch URL: " + cdnUrl);
+                String tileUrl = resolveTileUrl(originUrl);
+                Log.d(DEBUG_TAG, "Fetch URL: " + tileUrl);
 
                 FutureTarget<Bitmap> f = rm.asBitmap()
-                        .load(cdnUrl)
+                        .load(tileUrl)
                         .override(550, 550)
                         .submit();
                 synchronized (tileRequests) {
@@ -263,13 +267,13 @@ public class EarthFetcher {
                 throw new InterruptedException("fetch cancelled");
             }
             String originUrl = buildOriginUrl(imageId, grid, idx % grid, idx / grid);
-            String cdnUrl = cdnClient.buildFetchUrl(originUrl);
+            String tileUrl = resolveTileUrl(originUrl);
             Bitmap tile = null;
             for (int attempt = 1; attempt <= TILE_RETRY_COUNT; attempt++) {
                 try {
                     Log.d(TAG, "retrying tile " + idx + ", attempt " + attempt + "/" + TILE_RETRY_COUNT);
                     FutureTarget<Bitmap> retry = rm.asBitmap()
-                            .load(cdnUrl)
+                            .load(tileUrl)
                             .override(550, 550)
                             .submit();
                     synchronized (tileRequests) {
@@ -315,6 +319,15 @@ public class EarthFetcher {
         if (resolution <= 550) return 1;
         if (resolution <= 1100) return 2;
         return 4;
+    }
+
+    /**
+     * Resolve the tile download URL. Uses Cloudinary CDN if configured,
+     * otherwise falls back to direct himawari.asia origin URL.
+     */
+    private String resolveTileUrl(String originUrl) {
+        String cdnUrl = cdnClient.buildFetchUrl(originUrl);
+        return cdnUrl != null ? cdnUrl : originUrl;
     }
 
     public void clean() {
