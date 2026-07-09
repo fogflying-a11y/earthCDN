@@ -101,6 +101,8 @@
     <string name="about_copied">\"%s\" is copied to your clipboard</string>
 
     <string name="cdn_category_title">Cloudinary CDN</string>
+    <string name="cdn_enabled_title">启用 CDN 加速</string>
+    <string name="cdn_enabled_summary">通过 Cloudinary CDN 获取图像，关闭则直连源站</string>
     <string name="cdn_cloud_name_title">Cloud Name</string>
     <string name="cdn_cloud_name_summary">Enter your Cloudinary cloud name, or leave empty to use direct connection</string>
     <string name="cdn_cloud_name_missing">Cloud Name not configured. Long-press the done button → Settings → Cloudinary CDN to set it up.</string>

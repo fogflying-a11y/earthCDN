@@ -120,12 +120,15 @@ public class EarthSyncImpl {
             settings.resolution = 550;
         }
 
-        if (settings.cdnCloudName == null || settings.cdnCloudName.trim().isEmpty()) {
-            Log.i(TAG, "no cloud_name configured, will use direct connection to himawari.asia");
+        if (!settings.cdnEnabled) {
+            Log.i(TAG, "CDN disabled by user, using direct connection to himawari.asia");
+        } else if (settings.cdnCloudName == null || settings.cdnCloudName.trim().isEmpty()) {
+            Log.i(TAG, "CDN enabled but no cloud_name configured, falling back to direct connection to himawari.asia");
         }
 
         File fetched = null;
-        fetcher = createFetcher(settings.cdnCloudName);
+        String cloudName = settings.cdnEnabled ? settings.cdnCloudName : null;
+        fetcher = createFetcher(cloudName);
 
         try {
             Log.d(TAG, "about to fetch with resolution=" + settings.resolution + ", cloudName=" + settings.cdnCloudName);

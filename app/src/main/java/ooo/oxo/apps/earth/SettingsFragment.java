@@ -41,6 +41,24 @@ public class SettingsFragment extends PreferenceFragmentCompat {
     }
 
     private void setupSummaries() {
+        setupCdnEnabled();
+        setupCloudName();
+        setupDebug();
+    }
+
+    private void setupCdnEnabled() {
+        androidx.preference.SwitchPreference pref = findPreference("cdn_enabled");
+        if (pref != null) {
+            pref.setOnPreferenceChangeListener((preference, newValue) -> {
+                Boolean val = (Boolean) newValue;
+                android.util.Log.d(TAG, "cdn_enabled changed to: " + val);
+                syncToContentProvider(SettingsContract.Columns.CDN_ENABLED, val ? 1 : 0);
+                return true;
+            });
+        }
+    }
+
+    private void setupCloudName() {
         EditTextPreference cloudNamePref = findPreference("cdn_cloud_name");
         if (cloudNamePref != null) {
             cloudNamePref.setOnPreferenceChangeListener((preference, newValue) -> {
@@ -55,7 +73,9 @@ public class SettingsFragment extends PreferenceFragmentCompat {
                 return true;
             });
         }
+    }
 
+    private void setupDebug() {
         androidx.preference.SwitchPreference debugPref = findPreference("debug");
         if (debugPref != null) {
             debugPref.setOnPreferenceChangeListener((preference, newValue) -> {

@@ -109,7 +109,7 @@ public class SettingsProvider extends ContentProvider {
         private static final String TAG = "SettingsDatabaseHelper";
 
         private static final String DATABASE_NAME = "settings.db";
-        private static final int DATABASE_VERSION = 5;
+        private static final int DATABASE_VERSION = 6;
 
         SettingsDatabaseHelper(Context context) {
             super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -126,6 +126,7 @@ public class SettingsProvider extends ContentProvider {
                     ", " + SettingsContract.Columns.OFFSET_S + " REAL" +
                     ", " + SettingsContract.Columns.SCALE + " REAL DEFAULT 1" +
                     ", " + SettingsContract.Columns.CDN_CLOUD_NAME + " TEXT" +
+                    ", " + SettingsContract.Columns.CDN_ENABLED + " INTEGER DEFAULT 1" +
                     ")");
 
             db.insertOrThrow(SettingsContract.TABLE, null,
@@ -153,6 +154,10 @@ public class SettingsProvider extends ContentProvider {
             }
             // v5: removed cdn_enabled column (CDN is now the only fetch path)
             // SQLite doesn't support DROP COLUMN before 3.35.0, so we leave it if present
+            if (oldVersion < 6) {
+                db.execSQL("ALTER TABLE " + SettingsContract.TABLE +
+                        " ADD COLUMN " + SettingsContract.Columns.CDN_ENABLED + " INTEGER DEFAULT 1");
+            }
         }
 
     }

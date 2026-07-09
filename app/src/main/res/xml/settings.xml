@@ -26,6 +26,12 @@
         android:summary="%s"
         android:title="@string/settings_update_title" />
 
+    <SwitchPreference
+        android:defaultValue="true"
+        android:key="cdn_enabled"
+        android:summary="@string/cdn_enabled_summary"
+        android:title="@string/cdn_enabled_title" />
+
     <PreferenceCategory android:title="@string/cdn_category_title">
 
         <EditTextPreference
