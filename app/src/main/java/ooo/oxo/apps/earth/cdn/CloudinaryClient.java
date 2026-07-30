@@ -42,15 +42,22 @@ public class CloudinaryClient {
     }
 
     /**
-     * Build a Cloudinary fetch URL with f_auto,q_auto optimization.
-     * Returns null if cloud_name is invalid, caller should fall back to direct download.
+     * Build a Cloudinary fetch URL WITHOUT transformations (plain fetch).
+     * Format is byte-aligned with the EarthLiveSharp desktop client so that
+     * both clients sharing one cloud_name hit the same CDN cache entry.
+     * Only ':' is percent-encoded; slashes stay literal (do NOT URLEncoder.encode()).
+     * Returns null if cloud_name is invalid or originalUrl is null.
      */
     public String buildFetchUrl(String originalUrl) {
         if (!hasValidCloudName()) {
             return null;
         }
-        return String.format(Locale.US, "%s/%s/image/fetch/f_auto,q_auto/%s",
-                FETCH_BASE, cloudName, originalUrl);
+        if (originalUrl == null) {
+            return null;
+        }
+        String encodedUrl = originalUrl.replace(":", "%3A");
+        return String.format(Locale.US, "%s/%s/image/fetch/%s",
+                FETCH_BASE, cloudName, encodedUrl);
     }
 
     /**

@@ -6,7 +6,7 @@ Mantou Earth
 
 Fetch photo of the earth every 10–120 minutes from [Himawari-9](https://himawari.asia/) (formerly Himawari-8, [wiki](https://en.wikipedia.org/wiki/Himawari_8)), and make them your live wallpaper.
 
-Accelerating with Cloudinary CDN Fetch and using auto format optimization (WebP/AVIF) to reduce network traffic.
+Accelerating with Cloudinary CDN Fetch (plain fetch mode, no transformations), sharing the same CDN cache with the EarthLiveSharp desktop client under a common Cloud Name.
 
 [![Get it on Google Play][play badge]][play link]
 
@@ -52,17 +52,28 @@ Accelerating with Cloudinary CDN Fetch and using auto format optimization (WebP/
 
 ### 核心变更
 
-- **Cloudinary CDN Fetch**：新增 [CloudinaryClient](app/src/main/java/ooo/oxo/apps/earth/cdn/CloudinaryClient.java)，纯 Fetch 代理模式（无需 API Key/Secret，用户填入自己的 Cloud Name 即可）
+- **Cloudinary CDN Fetch**：新增 [CloudinaryClient](app/src/main/java/ooo/oxo/apps/earth/cdn/CloudinaryClient.java)，纯 Fetch 代理模式（无需 API Key/Secret，用户填入自己的 Cloud Name 即可）。**双模式**：Cloud Name 留空时自动回退为源站直连（himawari.asia），CDN 仍为推荐方式
 - **瓦片分块下载 + 拼接**：[EarthFetcher.java](app/src/main/java/ooo/oxo/apps/earth/EarthFetcher.java) 改为 2×2 / 3×3 / 4×4 瓦片拉取 + 合成，支持 550p–4400p 多分辨率
 - **API 时间戳**：从 `himawari.asia/img/D531106/latest.json` 实时获取最新可用帧（替代旧的本地时间盲猜逻辑）
 - **源站迁移**：从 `himawari8-dl.nict.go.jp`（已 403 下线）迁移到 `himawari.asia`（NICT 科学云，URL 格式兼容）
+
+### CDN 缓存共享与重试优化（2026-07-30）
+
+- **Fetch URL 与桌面端字节级对齐**：移除 URL 中的 `f_auto,q_auto` 转换段（plain fetch 模式），源站 URL 冒号 `:` 编码为 `%3A`（斜杠保留字面量）。对齐后本 App 与 [EarthLiveSharp](https://github.com/bitdust/EarthLiveSharp) 桌面端对同一卫星瓦片生成完全一致的 CDN URL：
+
+  ```
+  https://res.cloudinary.com/<cloud_name>/image/fetch/https%3A//himawari.asia/img/D531106/...
+  ```
+
+  同一 Cloud Name 下多端客户端 100% 复用同一份 CDN 缓存——每帧仅首个请求的设备消耗 1 次 Transformation Credit，其余设备由 CDN 边缘节点直接响应，0 转换消耗
+- **瞬时错误识别 + 指数退避**：瓦片下载重试仅在超时、连接失败、HTTP 5xx 时触发（间隔 1s / 2s / 4s 递增）；HTTP 4xx、DNS 解析失败等不可恢复错误立即放弃并终止本帧同步，避免无效重试拖慢 SyncAdapter
 
 ### 架构
 
 ```
 向日葵卫星源站 (himawari.asia)
          ↓ Cloudinary Fetch 代理
-   Cloudinary CDN 缓存
+   Cloudinary CDN 缓存（同一 Cloud Name 下多端共享）
          ↓
       你的设备
 ```

@@ -120,17 +120,17 @@ public class EarthSyncImpl {
             settings.resolution = 550;
         }
 
-        if (settings.cdnCloudName == null || settings.cdnCloudName.trim().isEmpty()) {
-            result.put(RESULT_ERROR, ERROR_CDN_NOT_CONFIGURED);
-            Log.w(TAG, "skipped sync: cloud_name is not configured. Please set it in Settings → Cloudinary CDN.");
-            return result;
-        }
+        // Empty cloud_name is a valid configuration: it selects direct origin mode
+        // (fetch tiles straight from himawari.asia instead of via Cloudinary CDN).
+        final boolean cdnMode = settings.cdnCloudName != null && !settings.cdnCloudName.trim().isEmpty();
 
         File fetched = null;
         fetcher = createFetcher(settings.cdnCloudName);
 
         try {
-            Log.d(TAG, "about to fetch with resolution=" + settings.resolution + ", cloudName=" + settings.cdnCloudName);
+            Log.d(TAG, "about to fetch with resolution=" + settings.resolution
+                    + ", mode=" + (cdnMode ? "cdn" : "origin")
+                    + ", cloudName=" + settings.cdnCloudName);
             fetched = fetcher.fetch(settings.resolution);
             Log.d(TAG, "fetch returned: " + (fetched != null ? fetched.getAbsolutePath() : "null"));
 
