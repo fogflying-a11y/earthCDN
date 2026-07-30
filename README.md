@@ -54,7 +54,7 @@ Accelerating with Cloudinary CDN Fetch (plain fetch mode, no transformations), s
 
 - **Cloudinary CDN Fetch**：新增 [CloudinaryClient](app/src/main/java/ooo/oxo/apps/earth/cdn/CloudinaryClient.java)，纯 Fetch 代理模式（无需 API Key/Secret，用户填入自己的 Cloud Name 即可）。**双模式**：Cloud Name 留空时自动回退为源站直连（himawari.asia），CDN 仍为推荐方式
 - **瓦片分块下载 + 拼接**：[EarthFetcher.java](app/src/main/java/ooo/oxo/apps/earth/EarthFetcher.java) 改为 2×2 / 3×3 / 4×4 瓦片拉取 + 合成，支持 550p–4400p 多分辨率
-- **API 时间戳**：从 `himawari.asia/img/D531106/latest.json` 实时获取最新可用帧（替代旧的本地时间盲猜逻辑）
+- **API 时间戳**：从 `himawari.asia/img/D531106/latest.json` 实时获取最新可用帧
 - **源站迁移**：从 `himawari8-dl.nict.go.jp`（已 403 下线）迁移到 `himawari.asia`（NICT 科学云，URL 格式兼容）
 
 ### CDN 缓存共享与重试优化（2026-07-30）
