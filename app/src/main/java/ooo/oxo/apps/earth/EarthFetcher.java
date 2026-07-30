@@ -26,6 +26,7 @@ import android.util.Log;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.RequestManager;
+import com.bumptech.glide.load.model.stream.HttpGlideUrlLoader;
 import com.bumptech.glide.request.FutureTarget;
 
 import java.io.File;
@@ -45,6 +46,9 @@ public class EarthFetcher {
     private static final long TILE_RETRY_BASE_DELAY_MS = 1000; // backoff: 1s / 2s / 4s
     private static final int API_RETRY_COUNT = 3;
     private static final long API_RETRY_BASE_DELAY_MS = 1000;
+    /** Glide HTTP timeout for tile downloads (connect + read). Default 2500ms is too short
+     *  for the Himawari origin server (TLS jitter ~35%, TTFB 2-7s). */
+    private static final int TILE_HTTP_TIMEOUT_MS = 30_000;
 
     private static final String ORIGIN_HOST = "himawari.asia";
     private static final String TILE_PATH_PREFIX = "img/D531106";
@@ -217,118 +221,30 @@ public class EarthFetcher {
     }
 
     /**
-     * Fetch tiles (via Cloudinary CDN or directly from the origin) and stitch them together.
+     * Fetch tiles sequentially (via Cloudinary CDN or directly from the origin)
+     * and stitch them together. Sequential downloading reduces concurrent connection
+     * pressure on the origin server (himawari.asia has ~35% TLS jitter).
      */
     private Bitmap fetchAndStitch(String imageId, int grid) throws Exception {
         Log.d(DEBUG_TAG, "fetchAndStitch(), imageId=" + imageId + ", grid=" + grid + ", mode=" + modeName());
         int fullSize = grid * 550;
-        Bitmap[] tiles = new Bitmap[grid * grid];
+        int tileCount = grid * grid;
+        Bitmap[] tiles = new Bitmap[tileCount];
 
-        for (int y = 0; y < grid; y++) {
-            for (int x = 0; x < grid; x++) {
-                String originUrl = buildOriginUrl(imageId, grid, x, y);
-                String tileUrl = resolveTileUrl(originUrl);
-                Log.d(DEBUG_TAG, modeName() + " tile URL: " + tileUrl);
-
-                FutureTarget<Bitmap> f = rm.asBitmap()
-                        .load(tileUrl)
-                        .override(550, 550)
-                        .submit();
-                synchronized (tileRequests) {
-                    tileRequests.add(f);
-                }
-            }
-        }
-
-        return collectAndStitch(tiles, grid, fullSize, imageId);
-    }
-
-    /**
-     * Collect downloaded tiles, retry any failures, then stitch.
-     * Throws if any tile cannot be retrieved after retries.
-     */
-    private Bitmap collectAndStitch(Bitmap[] tiles, int grid, int fullSize, String imageId) throws Exception {
-        List<FutureTarget<Bitmap>> futures;
-        synchronized (tileRequests) {
-            futures = new ArrayList<>(tileRequests);
-        }
-
-        List<Integer> failedIndices = new ArrayList<>();
-        for (int i = 0; i < futures.size(); i++) {
+        for (int idx = 0; idx < tileCount; idx++) {
             if (cancelled) {
                 throw new InterruptedException("fetch cancelled");
             }
-            try {
-                Bitmap tile = futures.get(i).get();
-                if (tile != null && tile.getWidth() > 0) {
-                    tiles[i] = tile;
-                } else {
-                    Log.w(TAG, "tile " + i + " returned empty bitmap");
-                    failedIndices.add(i);
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "tile " + i + " failed: " + e.getMessage());
-                failedIndices.add(i);
-            }
-        }
-
-        for (int idx : failedIndices) {
-            if (cancelled) {
-                throw new InterruptedException("fetch cancelled");
-            }
-            String originUrl = buildOriginUrl(imageId, grid, idx % grid, idx / grid);
+            int x = idx % grid;
+            int y = idx / grid;
+            String originUrl = buildOriginUrl(imageId, grid, x, y);
             String tileUrl = resolveTileUrl(originUrl);
-            Bitmap tile = null;
-            Throwable lastError = null;
-            for (int attempt = 1; attempt <= TILE_RETRY_COUNT; attempt++) {
-                // Backoff before each retry: 1s / 2s / 4s
-                long delay = TILE_RETRY_BASE_DELAY_MS * (1L << (attempt - 1));
-                Log.d(TAG, "retrying tile " + idx + " in " + delay + "ms, attempt " + attempt + "/" + TILE_RETRY_COUNT);
-                try {
-                    Thread.sleep(delay);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new InterruptedException("fetch cancelled");
-                }
-                if (cancelled) {
-                    throw new InterruptedException("fetch cancelled");
-                }
-                try {
-                    FutureTarget<Bitmap> retry = rm.asBitmap()
-                            .load(tileUrl)
-                            .override(550, 550)
-                            .submit();
-                    synchronized (tileRequests) {
-                        tileRequests.add(retry);
-                    }
-                    Bitmap bmp = retry.get();
-                    if (bmp != null && bmp.getWidth() > 0) {
-                        tile = bmp;
-                        Log.d(TAG, "tile " + idx + " succeeded on attempt " + attempt);
-                        break;
-                    }
-                    lastError = new Exception("empty bitmap"); // no status code → treat as transient
-                } catch (CancellationException ce) {
-                    throw new InterruptedException("fetch cancelled");
-                } catch (Exception e) {
-                    lastError = e;
-                    if (!isTransient(e)) {
-                        // Non-retryable (HTTP 4xx, DNS failure, ...): abort this tile and the whole frame
-                        throw new Exception("tile " + idx + " failed with non-retryable error, aborting: "
-                                + e.getMessage(), e);
-                    }
-                    Log.w(TAG, "retry " + attempt + "/" + TILE_RETRY_COUNT + " for tile " + idx
-                            + " failed (transient): " + e.getMessage());
-                }
-            }
-            if (tile != null) {
-                tiles[idx] = tile;
-            } else {
-                throw new Exception("tile " + idx + " failed after " + TILE_RETRY_COUNT
-                        + " retries, aborting: " + (lastError != null ? lastError.getMessage() : "unknown"));
-            }
+            Log.d(DEBUG_TAG, modeName() + " tile " + idx + "/" + (tileCount - 1) + " URL: " + tileUrl);
+
+            tiles[idx] = downloadTileWithRetry(tileUrl, idx);
         }
 
+        // Stitch all tiles into the final image
         Bitmap composed = Bitmap.createBitmap(fullSize, fullSize, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(composed);
         Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
@@ -346,9 +262,68 @@ public class EarthFetcher {
     }
 
     /**
+     * Download a single tile with retry (exponential backoff: 1s / 2s / 4s).
+     * Non-retryable errors (HTTP 4xx, DNS failure) abort immediately.
+     */
+    private Bitmap downloadTileWithRetry(String tileUrl, int idx) throws Exception {
+        Throwable lastError = null;
+
+        for (int attempt = 0; attempt <= TILE_RETRY_COUNT; attempt++) {
+            if (attempt > 0) {
+                // Backoff before retry: 1s / 2s / 4s
+                long delay = TILE_RETRY_BASE_DELAY_MS * (1L << (attempt - 1));
+                Log.d(TAG, "retrying tile " + idx + " in " + delay + "ms, attempt " + attempt + "/" + TILE_RETRY_COUNT);
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new InterruptedException("fetch cancelled");
+                }
+            }
+            if (cancelled) {
+                throw new InterruptedException("fetch cancelled");
+            }
+            try {
+                FutureTarget<Bitmap> future = rm.asBitmap()
+                        .load(tileUrl)
+                        .override(550, 550)
+                        .set(HttpGlideUrlLoader.TIMEOUT, TILE_HTTP_TIMEOUT_MS)
+                        .submit();
+                synchronized (tileRequests) {
+                    tileRequests.add(future);
+                }
+                Bitmap bmp = future.get();
+                if (bmp != null && bmp.getWidth() > 0) {
+                    if (attempt > 0) {
+                        Log.d(TAG, "tile " + idx + " succeeded on retry attempt " + attempt);
+                    }
+                    return bmp;
+                }
+                lastError = new Exception("empty bitmap");
+                Log.w(TAG, "tile " + idx + " returned empty bitmap");
+            } catch (CancellationException ce) {
+                throw new InterruptedException("fetch cancelled");
+            } catch (Exception e) {
+                lastError = e;
+                if (!isTransient(e)) {
+                    throw new Exception("tile " + idx + " failed with non-retryable error, aborting: "
+                            + e.getMessage(), e);
+                }
+                Log.w(TAG, "tile " + idx + " attempt " + attempt + " failed (transient): " + e.getMessage());
+            }
+        }
+
+        throw new Exception("tile " + idx + " failed after " + TILE_RETRY_COUNT
+                + " retries, aborting: " + (lastError != null ? lastError.getMessage() : "unknown"));
+    }
+
+    /**
      * Transient-error detection aligned with ELS CloudinaryUpload.IsTransient:
-     * timeout / connect failure / connection reset / HTTP 5xx → retryable.
-     * HTTP 4xx, DNS failure (UnknownHostException) → non-retryable, abort tile.
+     * - HTTP status -1 (no response / connection-level failure) → retryable
+     * - HTTP 5xx (server error) → retryable
+     * - Timeout / connect failure / connection reset / IOException → retryable
+     * - HTTP 4xx (client error) → non-retryable, abort tile
+     * - DNS failure (UnknownHostException) → non-retryable, abort tile
      * Walks the cause chain including GlideException.getRootCauses() since Glide
      * wraps network errors.
      */
@@ -356,11 +331,18 @@ public class EarthFetcher {
         Throwable cause = t;
         while (cause != null) {
             if (cause instanceof com.bumptech.glide.load.HttpException) {
-                return ((com.bumptech.glide.load.HttpException) cause).getStatusCode() >= 500;
+                int code = ((com.bumptech.glide.load.HttpException) cause).getStatusCode();
+                // status -1: connection-level failure (no HTTP response received) → transient
+                // status >= 500: server error → transient
+                // status 4xx: client error (bad cloud_name, missing tile) → non-retryable
+                return code < 0 || code >= 500;
             }
             if (cause instanceof java.net.SocketTimeoutException    // Timeout
                     || cause instanceof java.net.SocketException) { // ConnectFailure / ConnectionClosed / reset
                 return true;
+            }
+            if (cause instanceof java.net.UnknownHostException) {   // DNS resolution failure → non-retryable
+                return false;
             }
             if (cause instanceof com.bumptech.glide.load.engine.GlideException) {
                 for (Throwable root : ((com.bumptech.glide.load.engine.GlideException) cause).getRootCauses()) {
@@ -368,6 +350,10 @@ public class EarthFetcher {
                         return true;
                     }
                 }
+            }
+            if (cause instanceof java.io.IOException) {
+                // Catch-all for network I/O errors (SSLException, EOFException, etc.)
+                return true;
             }
             cause = cause.getCause();
         }
